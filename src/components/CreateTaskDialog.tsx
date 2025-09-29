@@ -36,7 +36,7 @@ export const CreateTaskDialog = ({
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [assignedTo, setAssignedTo] = useState<string>('');
+  const [assignedTo, setAssignedTo] = useState<string>('unassigned');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [points, setPoints] = useState(10);
   const [dueDate, setDueDate] = useState<Date>();
@@ -87,7 +87,7 @@ export const CreateTaskDialog = ({
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setAssignedTo('');
+    setAssignedTo('unassigned');
     setPriority('medium');
     setPoints(10);
     setDueDate(undefined);
@@ -112,7 +112,7 @@ export const CreateTaskDialog = ({
         description: description.trim() || null,
         household_id: householdId,
         created_by: userId,
-        assigned_to: assignedTo || null,
+        assigned_to: assignedTo === 'unassigned' ? null : assignedTo,
         priority,
         points,
         due_date: dueDate ? dueDate.toISOString() : null,
@@ -200,7 +200,7 @@ export const CreateTaskDialog = ({
                 <SelectValue placeholder="Wähle ein Mitglied oder lasse es offen" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Niemand (Gruppenaufgabe)</SelectItem>
+                <SelectItem value="unassigned">Niemand (Gruppenaufgabe)</SelectItem>
                 {householdMembers.map((member) => (
                   <SelectItem key={member.id} value={member.user_id}>
                     {member.display_name}
