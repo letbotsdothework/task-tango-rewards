@@ -244,7 +244,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      user_can_view_profile: {
+        Args: { _household_id: string; _profile_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "member"

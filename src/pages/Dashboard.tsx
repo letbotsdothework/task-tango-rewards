@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, Trophy, Target, Clock, LogOut } from 'lucide-react';
+import { CreateHouseholdDialog } from '@/components/CreateHouseholdDialog';
+import { JoinHouseholdDialog } from '@/components/JoinHouseholdDialog';
 
 interface Profile {
   id: string;
@@ -34,6 +36,8 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -107,6 +111,11 @@ const Dashboard = () => {
     }
   };
 
+  const handleHouseholdSuccess = () => {
+    fetchProfile();
+    fetchTasks();
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return 'bg-destructive';
@@ -170,11 +179,18 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Button className="w-full">
+                <Button 
+                  className="w-full"
+                  onClick={() => setShowCreateDialog(true)}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Create Household
                 </Button>
-                <Button variant="outline" className="w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setShowJoinDialog(true)}
+                >
                   Join Household
                 </Button>
               </div>
@@ -274,6 +290,24 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Household Dialogs */}
+      {user && (
+        <>
+          <CreateHouseholdDialog
+            open={showCreateDialog}
+            onOpenChange={setShowCreateDialog}
+            onSuccess={handleHouseholdSuccess}
+            userId={user.id}
+          />
+          <JoinHouseholdDialog
+            open={showJoinDialog}
+            onOpenChange={setShowJoinDialog}
+            onSuccess={handleHouseholdSuccess}
+            userId={user.id}
+          />
+        </>
+      )}
     </div>
   );
 };
