@@ -202,7 +202,7 @@ export const CreateTaskDialog = ({
               <SelectContent>
                 <SelectItem value="unassigned">Niemand (Gruppenaufgabe)</SelectItem>
                 {householdMembers.map((member) => (
-                  <SelectItem key={member.id} value={member.user_id}>
+                  <SelectItem key={member.id} value={member.id}>
                     {member.display_name}
                   </SelectItem>
                 ))}
