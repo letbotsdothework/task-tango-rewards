@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trophy, Target, Clock, LogOut } from 'lucide-react';
+import { Plus, Trophy, Target, Clock, LogOut, Users } from 'lucide-react';
 import { CreateHouseholdDialog } from '@/components/CreateHouseholdDialog';
 import { JoinHouseholdDialog } from '@/components/JoinHouseholdDialog';
 import { CreateTaskDialog } from '@/components/CreateTaskDialog';
+import { TaskCard } from '@/components/TaskCard';
+import { Leaderboard } from '@/components/Leaderboard';
 
 interface Profile {
   id: string;
@@ -21,13 +23,17 @@ interface Profile {
 interface Task {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'in_progress' | 'completed' | 'overdue';
   points: number;
   due_date: string | null;
   assigned_to: string | null;
   created_at: string;
+  completed_at: string | null;
+  assignee?: {
+    display_name: string;
+  };
 }
 
 const Dashboard = () => {
@@ -49,9 +55,48 @@ const Dashboard = () => {
 
     if (user) {
       fetchProfile();
-      fetchTasks();
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (profile?.household_id) {
+      fetchTasks();
+      
+      // Set up real-time subscription for tasks
+      const channel = supabase
+        .channel('dashboard-tasks')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tasks',
+            filter: `household_id=eq.${profile.household_id}`
+          },
+          () => {
+            fetchTasks();
+            fetchProfile(); // Refresh profile to get updated points
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: `household_id=eq.${profile.household_id}`
+          },
+          () => {
+            fetchProfile();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [profile?.household_id]);
 
   const fetchProfile = async () => {
     try {
@@ -80,14 +125,37 @@ const Dashboard = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: tasksData, error } = await supabase
         .from('tasks')
         .select('*')
         .eq('household_id', profile.household_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTasks(data || []);
+
+      // Fetch assignee names for tasks that have assigned_to
+      const taskIds = tasksData?.filter(task => task.assigned_to).map(task => task.assigned_to) || [];
+      const uniqueAssigneeIds = [...new Set(taskIds)];
+      
+      let assigneeNames: { [key: string]: string } = {};
+      if (uniqueAssigneeIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', uniqueAssigneeIds);
+        
+        profiles?.forEach(profile => {
+          assigneeNames[profile.id] = profile.display_name;
+        });
+      }
+
+      // Combine tasks with assignee names
+      const tasksWithAssignees = tasksData?.map(task => ({
+        ...task,
+        assignee: task.assigned_to ? { display_name: assigneeNames[task.assigned_to] || 'Unknown' } : undefined
+      })) || [];
+
+      setTasks(tasksWithAssignees);
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast({
@@ -199,96 +267,114 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{tasks.length}</div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                    <Trophy className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {tasks.filter(t => t.status === 'completed').length}
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {tasks.filter(t => t.status === 'pending').length}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tasks Section */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-                  <Target className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{tasks.length}</div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                  <Trophy className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {tasks.filter(t => t.status === 'completed').length}
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>Tasks</CardTitle>
+                    <Button onClick={() => setShowCreateTaskDialog(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Task
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {tasks.filter(t => t.status === 'pending').length}
-                  </div>
+                  {tasks.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No tasks yet. Create your first task to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {tasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          currentUserId={profile.id}
+                          onTaskUpdate={() => {
+                            fetchTasks();
+                            fetchProfile();
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Tasks Section */}
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Recent Tasks</CardTitle>
-                  <Button onClick={() => setShowCreateTaskDialog(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Task
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {tasks.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No tasks yet. Create your first task to get started!</p>
+            {/* Sidebar */}
+            <div className="space-y-6">
+              {/* Leaderboard */}
+              <Leaderboard 
+                householdId={profile.household_id}
+                currentUserId={profile.id}
+              />
+
+              {/* Quick Stats */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Your Stats
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Total Points</span>
+                    <span className="font-bold text-primary">{profile.total_points}</span>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {tasks.slice(0, 5).map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-medium">{task.title}</h3>
-                            <Badge className={getPriorityColor(task.priority)} variant="secondary">
-                              {task.priority}
-                            </Badge>
-                            <Badge className={getStatusColor(task.status)} variant="secondary">
-                              {task.status}
-                            </Badge>
-                          </div>
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground">{task.description}</p>
-                          )}
-                          {task.due_date && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Due: {new Date(task.due_date).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-primary">{task.points} pts</div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Tasks Completed</span>
+                    <span className="font-bold">{tasks.filter(t => t.status === 'completed' && t.assigned_to === profile.id).length}</span>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Tasks Assigned</span>
+                    <span className="font-bold">{tasks.filter(t => t.assigned_to === profile.id && t.status !== 'completed').length}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
       </main>
