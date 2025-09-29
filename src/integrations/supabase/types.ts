@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string
+          household_id: string
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by: string
+          household_id: string
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string
+          household_id?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       households: {
         Row: {
           created_at: string
@@ -81,6 +114,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reminders: {
+        Row: {
+          created_at: string
+          id: string
+          is_sent: boolean | null
+          reminder_time: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_sent?: boolean | null
+          reminder_time: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_sent?: boolean | null
+          reminder_time?: string
+          task_id?: string
+        }
+        Relationships: []
       }
       reward_claims: {
         Row: {
@@ -172,48 +229,114 @@ export type Database = {
           },
         ]
       }
+      task_completions: {
+        Row: {
+          completed_at: string
+          completed_by: string
+          id: string
+          points_awarded: number
+          task_id: string
+        }
+        Insert: {
+          completed_at?: string
+          completed_by: string
+          id?: string
+          points_awarded: number
+          task_id: string
+        }
+        Update: {
+          completed_at?: string
+          completed_by?: string
+          id?: string
+          points_awarded?: number
+          task_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assigned_to: string | null
+          assignment_type: string | null
+          bonus_points: number | null
+          challenge_deadline: string | null
+          color: string | null
           completed_at: string | null
           created_at: string
           created_by: string
+          custom_category: string | null
           description: string | null
           due_date: string | null
           household_id: string
+          icon: string | null
           id: string
+          image_url: string | null
+          is_challenge: boolean | null
+          is_private: boolean | null
+          is_recurring: boolean | null
+          next_occurrence: string | null
+          notes: string | null
           points: number
           priority: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern: string | null
+          rotation_order: number | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          assignment_type?: string | null
+          bonus_points?: number | null
+          challenge_deadline?: string | null
+          color?: string | null
           completed_at?: string | null
           created_at?: string
           created_by: string
+          custom_category?: string | null
           description?: string | null
           due_date?: string | null
           household_id: string
+          icon?: string | null
           id?: string
+          image_url?: string | null
+          is_challenge?: boolean | null
+          is_private?: boolean | null
+          is_recurring?: boolean | null
+          next_occurrence?: string | null
+          notes?: string | null
           points?: number
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern?: string | null
+          rotation_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          assignment_type?: string | null
+          bonus_points?: number | null
+          challenge_deadline?: string | null
+          color?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string
+          custom_category?: string | null
           description?: string | null
           due_date?: string | null
           household_id?: string
+          icon?: string | null
           id?: string
+          image_url?: string | null
+          is_challenge?: boolean | null
+          is_private?: boolean | null
+          is_recurring?: boolean | null
+          next_occurrence?: string | null
+          notes?: string | null
           points?: number
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_pattern?: string | null
+          rotation_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string

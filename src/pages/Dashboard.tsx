@@ -5,19 +5,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trophy, Target, Clock, LogOut, Users } from 'lucide-react';
+import { Plus, Trophy, Target, Clock, LogOut, Users, Home, Gift, BarChart3, Shield } from 'lucide-react';
 import { CreateHouseholdDialog } from '@/components/CreateHouseholdDialog';
 import { JoinHouseholdDialog } from '@/components/JoinHouseholdDialog';
 import { CreateTaskDialog } from '@/components/CreateTaskDialog';
 import { TaskCard } from '@/components/TaskCard';
 import { Leaderboard } from '@/components/Leaderboard';
+import { RewardsSystem } from '@/components/RewardsSystem';
+import { AdminPanel } from '@/components/AdminPanel';
 
 interface Profile {
   id: string;
   display_name: string;
   total_points: number;
   household_id: string | null;
+  role: string;
 }
 
 interface Task {
@@ -31,6 +35,17 @@ interface Task {
   assigned_to: string | null;
   created_at: string;
   completed_at: string | null;
+  assignment_type: 'individual' | 'group' | 'rotation';
+  is_recurring: boolean;
+  recurrence_pattern: string | null;
+  is_private: boolean;
+  icon: string | null;
+  color: string | null;
+  image_url: string | null;
+  notes: string | null;
+  is_challenge: boolean;
+  bonus_points: number;
+  challenge_deadline: string | null;
   assignee?: {
     display_name: string;
   };
@@ -46,6 +61,7 @@ const Dashboard = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -152,6 +168,7 @@ const Dashboard = () => {
       // Combine tasks with assignee names
       const tasksWithAssignees = tasksData?.map(task => ({
         ...task,
+        assignment_type: task.assignment_type as 'individual' | 'group' | 'rotation',
         assignee: task.assigned_to ? { display_name: assigneeNames[task.assigned_to] || 'Unknown' } : undefined
       })) || [];
 
@@ -186,28 +203,21 @@ const Dashboard = () => {
     fetchTasks();
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'bg-destructive';
-      case 'medium': return 'bg-warning';
-      case 'low': return 'bg-success';
-      default: return 'bg-muted';
-    }
+  const getPendingTasksCount = () => {
+    return tasks.filter(t => t.status === 'pending').length;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-success';
-      case 'in_progress': return 'bg-primary';
-      case 'overdue': return 'bg-destructive';
-      case 'pending': return 'bg-muted';
-      default: return 'bg-muted';
-    }
+  const getCompletedTasksCount = () => {
+    return tasks.filter(t => t.status === 'completed').length;
+  };
+
+  const getUserTasksCount = () => {
+    return tasks.filter(t => t.assigned_to === profile?.id && t.status !== 'completed').length;
   };
 
   if (loading || loadingData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background-start to-background-end flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="mt-2 text-muted-foreground">Loading your dashboard...</p>
@@ -217,19 +227,19 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background-start to-background-end">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
       {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm">
+      <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-primary">TaskTango</h1>
+            <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">TaskTango</h1>
             <p className="text-muted-foreground">Welcome back, {profile?.display_name}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-primary">
-              <Trophy className="w-5 h-5" />
-              <span className="font-semibold">{profile?.total_points || 0} points</span>
-            </div>
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-gradient-secondary">
+              <Trophy className="w-4 h-4 mr-2" />
+              {profile?.total_points || 0} Punkte
+            </Badge>
             <Button variant="outline" onClick={handleSignOut}>
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
@@ -250,7 +260,7 @@ const Dashboard = () => {
             <CardContent>
               <div className="space-y-2">
                 <Button 
-                  className="w-full"
+                  className="w-full bg-gradient-primary"
                   onClick={() => setShowCreateDialog(true)}
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -267,115 +277,187 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 mb-8">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <Home className="w-4 h-4" />
+                Übersicht
+              </TabsTrigger>
+              <TabsTrigger value="rewards" className="flex items-center gap-2">
+                <Gift className="w-4 h-4" />
+                Belohnungen
+              </TabsTrigger>
+              {profile.role === 'admin' && (
+                <TabsTrigger value="admin" className="flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  Admin
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="leaderboard" className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Rangliste
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-8">
+              {/* Statistics Cards */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card className="hover:shadow-medium transition-shadow">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+                    <CardTitle className="text-sm font-medium">Gesamt Aufgaben</CardTitle>
                     <Target className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{tasks.length}</div>
+                    <p className="text-xs text-muted-foreground">Alle Household-Aufgaben</p>
                   </CardContent>
                 </Card>
                 
-                <Card>
+                <Card className="hover:shadow-medium transition-shadow">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                    <Trophy className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {tasks.filter(t => t.status === 'completed').length}
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                    <CardTitle className="text-sm font-medium">Offene Aufgaben</CardTitle>
                     <Clock className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
-                      {tasks.filter(t => t.status === 'pending').length}
-                    </div>
+                    <div className="text-2xl font-bold">{getPendingTasksCount()}</div>
+                    <p className="text-xs text-muted-foreground">Warten auf Erledigung</p>
+                  </CardContent>
+                </Card>
+                
+                <Card className="hover:shadow-medium transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Erledigte Aufgaben</CardTitle>
+                    <Trophy className="h-4 w-4 text-success" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{getCompletedTasksCount()}</div>
+                    <p className="text-xs text-muted-foreground">Bereits abgeschlossen</p>
+                  </CardContent>
+                </Card>
+                
+                <Card className="hover:shadow-medium transition-shadow">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Deine Aufgaben</CardTitle>
+                    <Users className="h-4 w-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{getUserTasksCount()}</div>
+                    <p className="text-xs text-muted-foreground">Dir zugewiesen</p>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Tasks Section */}
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle>Tasks</CardTitle>
-                    <Button onClick={() => setShowCreateTaskDialog(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Task
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {tasks.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p>No tasks yet. Create your first task to get started!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {tasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          currentUserId={profile.id}
-                          onTaskUpdate={() => {
-                            fetchTasks();
-                            fetchProfile();
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+              <div className="grid gap-8 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Deine Aufgaben</CardTitle>
+                          <CardDescription>Verwalte und erledige deine Household-Aufgaben</CardDescription>
+                        </div>
+                        <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Aufgabe hinzufügen
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {tasks.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Target className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+                          <h3 className="text-lg font-medium mb-2">Noch keine Aufgaben</h3>
+                          <p className="text-muted-foreground mb-4">Erstelle deine erste Aufgabe um zu beginnen!</p>
+                          <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Erste Aufgabe erstellen
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {tasks.slice(0, 6).map((task) => (
+                            <TaskCard
+                              key={task.id}
+                              task={task}
+                              currentUserId={profile.id}
+                              onTaskUpdate={handleHouseholdSuccess}
+                            />
+                          ))}
+                          {tasks.length > 6 && (
+                            <div className="text-center pt-4">
+                              <p className="text-muted-foreground">
+                                ...und {tasks.length - 6} weitere Aufgaben
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Leaderboard */}
-              <Leaderboard 
-                householdId={profile.household_id}
-                currentUserId={profile.id}
+                {/* Sidebar */}
+                <div className="space-y-6">
+                  <Leaderboard 
+                    householdId={profile.household_id}
+                    currentUserId={profile.id}
+                  />
+
+                  {/* Quick Stats */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="w-5 h-5 text-primary" />
+                        Deine Statistiken
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Gesamte Punkte</span>
+                        <Badge variant="secondary" className="bg-gradient-primary text-white">
+                          {profile.total_points}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Erledigte Aufgaben</span>
+                        <span className="font-bold">{tasks.filter(t => t.status === 'completed' && t.assigned_to === profile.id).length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Zugewiesene Aufgaben</span>
+                        <span className="font-bold">{getUserTasksCount()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rewards">
+              <RewardsSystem 
+                userId={profile.id} 
+                householdId={profile.household_id} 
+                userPoints={profile.total_points}
               />
+            </TabsContent>
 
-              {/* Quick Stats */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    Your Stats
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Total Points</span>
-                    <span className="font-bold text-primary">{profile.total_points}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Tasks Completed</span>
-                    <span className="font-bold">{tasks.filter(t => t.status === 'completed' && t.assigned_to === profile.id).length}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Tasks Assigned</span>
-                    <span className="font-bold">{tasks.filter(t => t.assigned_to === profile.id && t.status !== 'completed').length}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+            {profile.role === 'admin' && (
+              <TabsContent value="admin">
+                <AdminPanel 
+                  userId={profile.id} 
+                  householdId={profile.household_id} 
+                  userRole={profile.role}
+                />
+              </TabsContent>
+            )}
+
+            <TabsContent value="leaderboard">
+              <Leaderboard 
+                householdId={profile.household_id} 
+                currentUserId={profile.id} 
+              />
+            </TabsContent>
+          </Tabs>
         )}
       </main>
 
