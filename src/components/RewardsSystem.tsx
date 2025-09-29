@@ -175,15 +175,29 @@ export const RewardsSystem = ({ userId, householdId, userPoints, onPointsChange 
 
       if (claimError) throw claimError;
 
-      // Update user points
+      // Update user points using fresh value from backend to avoid stale props
+      const { data: profileRow, error: profileError } = await supabase
+        .from('profiles')
+        .select('id,total_points')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+      if (!profileRow) throw new Error('Profil nicht gefunden.');
+
+      if (profileRow.total_points < reward.points_cost) {
+        throw new Error('Nicht genug Punkte, bitte aktualisieren.');
+      }
+
+      const newTotal = profileRow.total_points - reward.points_cost;
+
       const { error: pointsError } = await supabase
         .from('profiles')
         .update({ 
-          total_points: userPoints - reward.points_cost 
+          total_points: newTotal 
         })
-        .eq('user_id', userId);
+        .eq('id', userId);
 
-      if (pointsError) throw pointsError;
 
       toast({
         title: "Reward Claimed!",
