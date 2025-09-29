@@ -313,7 +313,7 @@ const Dashboard = () => {
               open={showCreateTaskDialog}
               onOpenChange={setShowCreateTaskDialog}
               onSuccess={handleHouseholdSuccess}
-              userId={user.id}
+              userId={profile.id}
               householdId={profile.household_id}
             />
           )}
