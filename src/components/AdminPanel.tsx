@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Shield, Edit, Save, X, Users, Award, BarChart3, Settings } from 'lucide-react';
+import { Shield, Edit, Save, X, Users, Award, BarChart3, Settings, Mail, UserPlus, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface AdminPanelProps {
   userId: string;
@@ -32,13 +33,30 @@ interface UserPoints {
   user_id: string;
 }
 
+interface HouseholdInvite {
+  id: string;
+  invited_email: string;
+  expires_at: string;
+  is_accepted: boolean;
+  created_at: string;
+  accepted_at: string | null;
+}
+
 export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: AdminPanelProps) => {
   const [tasks, setTasks] = useState<TaskEdit[]>([]);
   const [users, setUsers] = useState<UserPoints[]>([]);
+  const [invites, setInvites] = useState<HouseholdInvite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [tempPoints, setTempPoints] = useState<{ [key: string]: number }>({});
+  
+  // Invite form state
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  const [householdName, setHouseholdName] = useState('');
+  const [inviterName, setInviterName] = useState('');
   
   const { toast } = useToast();
 
@@ -51,6 +69,8 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     if (householdId) {
       fetchTasks();
       fetchUsers();
+      fetchInvites();
+      fetchHouseholdInfo();
     }
   }, [householdId]);
 
@@ -98,6 +118,40 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
       console.error('Error fetching users:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchInvites = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('household_invites')
+        .select('id, invited_email, expires_at, is_accepted, created_at, accepted_at')
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInvites(data || []);
+    } catch (error) {
+      console.error('Error fetching invites:', error);
+    }
+  };
+
+  const fetchHouseholdInfo = async () => {
+    try {
+      // Get household name and current user's name
+      const [householdResult, profileResult] = await Promise.all([
+        supabase.from('households').select('name').eq('id', householdId).single(),
+        supabase.from('profiles').select('display_name').eq('id', userId).single()
+      ]);
+
+      if (householdResult.data?.name) {
+        setHouseholdName(householdResult.data.name);
+      }
+      if (profileResult.data?.display_name) {
+        setInviterName(profileResult.data.display_name);
+      }
+    } catch (error) {
+      console.error('Error fetching household info:', error);
     }
   };
 
@@ -173,6 +227,67 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     setTempPoints({});
   };
 
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte gib eine E-Mail-Adresse ein.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!householdName || !inviterName) {
+      toast({
+        title: "Fehler", 
+        description: "Haushaltsinformationen nicht verfügbar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsInviting(true);
+    try {
+      // Get current user's session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Nicht authentifiziert');
+      }
+
+      const { data, error } = await supabase.functions.invoke('send-household-invite', {
+        body: {
+          householdId,
+          invitedEmail: inviteEmail.trim(),
+          householdName,
+          inviterName,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Einladung versendet! 📧",
+        description: `Einladung an ${inviteEmail} wurde erfolgreich versendet.`,
+      });
+
+      setInviteEmail('');
+      setIsInviteDialogOpen(false);
+      fetchInvites(); // Refresh invites list
+    } catch (error: any) {
+      console.error('Error sending invite:', error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Fehler beim Versenden der Einladung.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -210,7 +325,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
       </div>
 
       <Tabs defaultValue="tasks" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tasks" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             Aufgaben-Punkte
@@ -218,6 +333,10 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             Benutzer-Punkte
+          </TabsTrigger>
+          <TabsTrigger value="invites" className="flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            Einladungen
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2">
             <Settings className="w-4 h-4" />
@@ -369,6 +488,128 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                     </div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="invites" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Haushalt-Einladungen</span>
+                <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-gradient-secondary">
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Neue Einladung
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Mitbewohner einladen</DialogTitle>
+                      <DialogDescription>
+                        Lade neue Mitglieder zu deinem Haushalt "{householdName}" ein.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite-email">E-Mail-Adresse *</Label>
+                        <Input
+                          id="invite-email"
+                          type="email"
+                          placeholder="name@beispiel.de"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          disabled={isInviting}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setIsInviteDialogOpen(false)}
+                        disabled={isInviting}
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button onClick={sendInvite} disabled={isInviting}>
+                        {isInviting ? (
+                          "Versende..."
+                        ) : (
+                          <>
+                            <Mail className="w-4 h-4 mr-2" />
+                            Einladung senden
+                          </>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardTitle>
+              <CardDescription>
+                Verwalte ausstehende und akzeptierte Einladungen für dein Household.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {invites.map((invite) => (
+                  <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        invite.is_accepted 
+                          ? 'bg-green-100 text-green-600'
+                          : new Date(invite.expires_at) < new Date()
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-yellow-100 text-yellow-600'
+                      }`}>
+                        {invite.is_accepted ? (
+                          <CheckCircle className="w-5 h-5" />
+                        ) : new Date(invite.expires_at) < new Date() ? (
+                          <AlertCircle className="w-5 h-5" />
+                        ) : (
+                          <Clock className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-medium">{invite.invited_email}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {invite.is_accepted
+                            ? `Akzeptiert am ${format(new Date(invite.accepted_at!), 'dd.MM.yyyy HH:mm')}`
+                            : new Date(invite.expires_at) < new Date()
+                            ? `Abgelaufen am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
+                            : `Läuft ab am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Badge variant={
+                        invite.is_accepted 
+                          ? "default"
+                          : new Date(invite.expires_at) < new Date()
+                          ? "destructive"
+                          : "secondary"
+                      }>
+                        {invite.is_accepted
+                          ? "Akzeptiert"
+                          : new Date(invite.expires_at) < new Date()
+                          ? "Abgelaufen"
+                          : "Ausstehend"
+                        }
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+                
+                {invites.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Mail className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Noch keine Einladungen versendet.</p>
+                    <p className="text-sm">Lade neue Mitglieder zu deinem Haushalt ein!</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
