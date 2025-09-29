@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ interface Household {
   member_count: number;
 }
 
-export const JoinHouseholdDialog: React.FC<JoinHouseholdDialogProps> = ({
+export const JoinHouseholdDialog = ({
   open,
   onOpenChange,
   onSuccess,

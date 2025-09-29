@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ interface CreateHouseholdDialogProps {
   userId: string;
 }
 
-export const CreateHouseholdDialog: React.FC<CreateHouseholdDialogProps> = ({
+export const CreateHouseholdDialog = ({
   open,
   onOpenChange,
   onSuccess,
