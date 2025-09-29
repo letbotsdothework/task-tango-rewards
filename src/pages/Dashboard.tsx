@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Plus, Trophy, Target, Clock, LogOut } from 'lucide-react';
 import { CreateHouseholdDialog } from '@/components/CreateHouseholdDialog';
 import { JoinHouseholdDialog } from '@/components/JoinHouseholdDialog';
+import { CreateTaskDialog } from '@/components/CreateTaskDialog';
 
 interface Profile {
   id: string;
@@ -38,6 +39,7 @@ const Dashboard = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -240,7 +242,7 @@ const Dashboard = () => {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Recent Tasks</CardTitle>
-                  <Button>
+                  <Button onClick={() => setShowCreateTaskDialog(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     Add Task
                   </Button>
@@ -306,6 +308,15 @@ const Dashboard = () => {
             onSuccess={handleHouseholdSuccess}
             userId={user.id}
           />
+          {profile?.household_id && (
+            <CreateTaskDialog
+              open={showCreateTaskDialog}
+              onOpenChange={setShowCreateTaskDialog}
+              onSuccess={handleHouseholdSuccess}
+              userId={user.id}
+              householdId={profile.household_id}
+            />
+          )}
         </>
       )}
     </div>
