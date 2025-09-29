@@ -18,6 +18,9 @@ interface Task {
   assigned_to: string | null;
   created_at: string;
   completed_at: string | null;
+  is_challenge: boolean;
+  bonus_points: number;
+  challenge_deadline: string | null;
   assignee?: {
     display_name: string;
   };
@@ -66,18 +69,35 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
     setIsCompleting(true);
     
     try {
+      const completedAt = new Date().toISOString();
+      
       // Update task status
       const { error: taskError } = await supabase
         .from('tasks')
         .update({
           status: 'completed',
-          completed_at: new Date().toISOString(),
+          completed_at: completedAt,
           // If it's a group task (unassigned), assign it to the current user who completed it
           assigned_to: task.assigned_to || currentUserId
         })
         .eq('id', task.id);
 
       if (taskError) throw taskError;
+
+      // Calculate total points including bonus for challenge tasks
+      let totalPoints = task.points;
+      let bonusMessage = '';
+      
+      // Check if it's a challenge task completed before deadline
+      if (task.is_challenge && task.challenge_deadline && task.bonus_points > 0) {
+        const deadline = new Date(task.challenge_deadline);
+        const completed = new Date(completedAt);
+        
+        if (completed <= deadline) {
+          totalPoints += task.bonus_points;
+          bonusMessage = ` + ${task.bonus_points} bonus points for completing the challenge on time!`;
+        }
+      }
 
       // Award points to the user
       const { data: currentProfile, error: fetchError } = await supabase
@@ -91,7 +111,7 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ 
-          total_points: currentProfile.total_points + task.points 
+          total_points: currentProfile.total_points + totalPoints 
         })
         .eq('id', currentUserId);
       
@@ -99,7 +119,7 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
 
       toast({
         title: "Task completed! 🎉",
-        description: `You earned ${task.points} points for completing "${task.title}"`,
+        description: `You earned ${totalPoints} points for completing "${task.title}"${bonusMessage}`,
       });
 
       onTaskUpdate();

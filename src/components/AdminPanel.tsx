@@ -14,6 +14,7 @@ interface AdminPanelProps {
   userId: string;
   householdId: string;
   userRole: string;
+  onPointsChange?: () => void;
 }
 
 interface TaskEdit {
@@ -31,7 +32,7 @@ interface UserPoints {
   user_id: string;
 }
 
-export const AdminPanel = ({ userId, householdId, userRole }: AdminPanelProps) => {
+export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: AdminPanelProps) => {
   const [tasks, setTasks] = useState<TaskEdit[]>([]);
   const [users, setUsers] = useState<UserPoints[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,6 +143,10 @@ export const AdminPanel = ({ userId, householdId, userRole }: AdminPanelProps) =
 
       setEditingUser(null);
       fetchUsers();
+      // Notify parent component to refresh points
+      if (onPointsChange) {
+        onPointsChange();
+      }
     } catch (error: any) {
       console.error('Error updating user points:', error);
       toast({

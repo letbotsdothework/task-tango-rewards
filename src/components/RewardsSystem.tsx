@@ -16,6 +16,7 @@ interface RewardsSystemProps {
   userId: string;
   householdId: string;
   userPoints: number;
+  onPointsChange?: () => void;
 }
 
 interface Reward {
@@ -45,7 +46,7 @@ interface RewardClaim {
 
 const rewardIcons = ['🎁', '🍕', '🎬', '🎮', '📚', '☕', '🍰', '🎵', '🏆', '⭐'];
 
-export const RewardsSystem = ({ userId, householdId, userPoints }: RewardsSystemProps) => {
+export const RewardsSystem = ({ userId, householdId, userPoints, onPointsChange }: RewardsSystemProps) => {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [rewardClaims, setRewardClaims] = useState<RewardClaim[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -190,7 +191,10 @@ export const RewardsSystem = ({ userId, householdId, userPoints }: RewardsSystem
       });
 
       fetchRewardClaims();
-      // The parent component should refetch user points
+      // Notify parent component to refresh points
+      if (onPointsChange) {
+        onPointsChange();
+      }
     } catch (error: any) {
       console.error('Error claiming reward:', error);
       toast({
