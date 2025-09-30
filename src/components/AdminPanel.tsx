@@ -659,19 +659,19 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
               <CardTitle className="flex items-center justify-between">
                 <span>Haushalt-Einladungen</span>
                 <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DialogTrigger asChild>
                         <Button className="bg-gradient-secondary">
                           <UserPlus className="w-4 h-4 mr-2" />
                           Neue Einladung
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Neue Mitglieder per E-Mail einladen</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </DialogTrigger>
+                      </DialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Neue Mitglieder per E-Mail einladen</p>
+                    </TooltipContent>
+                  </Tooltip>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Mitbewohner einladen</DialogTitle>
