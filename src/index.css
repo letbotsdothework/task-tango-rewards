@@ -43,6 +43,10 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
+    /* Popover and dropdown styling */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 20%;
+
     /* Border and input styling */
     --border: 252 15% 90%;
     --input: 252 15% 95%;
