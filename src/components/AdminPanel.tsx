@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Shield, Edit, Save, X, Users, Award, BarChart3, Settings, Mail, UserPlus, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Shield, Edit, Save, X, Users, Award, BarChart3, Settings, Mail, UserPlus, Clock, CheckCircle, AlertCircle, Crown, UserCog } from 'lucide-react';
 import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AdminPanelProps {
   userId: string;
@@ -31,6 +33,7 @@ interface UserPoints {
   display_name: string;
   total_points: number;
   user_id: string;
+  role: 'admin' | 'moderator' | 'member';
 }
 
 interface HouseholdInvite {
@@ -108,7 +111,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name, total_points, user_id')
+        .select('id, display_name, total_points, user_id, role')
         .eq('household_id', householdId)
         .order('total_points', { ascending: false });
 
@@ -227,6 +230,58 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     setTempPoints({});
   };
 
+  const updateUserRole = async (profileId: string, newRole: 'admin' | 'moderator' | 'member') => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', profileId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Rolle aktualisiert!",
+        description: "Die Benutzerrolle wurde erfolgreich geändert.",
+      });
+
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Error updating user role:', error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Fehler beim Aktualisieren der Rolle.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getRoleBadge = (role: string) => {
+    const roleConfig = {
+      admin: { label: 'Administrator', icon: Crown, color: 'bg-gradient-primary text-white' },
+      moderator: { label: 'Moderator', icon: UserCog, color: 'bg-gradient-secondary text-white' },
+      member: { label: 'Mitglied', icon: Users, color: 'bg-muted text-muted-foreground' }
+    };
+    
+    const config = roleConfig[role as keyof typeof roleConfig] || roleConfig.member;
+    const Icon = config.icon;
+    
+    return (
+      <Badge className={config.color}>
+        <Icon className="w-3 h-3 mr-1" />
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const getRoleDescription = (role: string) => {
+    const descriptions = {
+      admin: 'Kann alles verwalten: Mitglieder, Aufgaben, Belohnungen, Einstellungen',
+      moderator: 'Kann Aufgaben und Kategorien erstellen und bearbeiten',
+      member: 'Kann Aufgaben abschließen und Belohnungen beanspruchen'
+    };
+    return descriptions[role as keyof typeof descriptions] || descriptions.member;
+  };
+
   const sendInvite = async () => {
     if (!inviteEmail.trim()) {
       toast({
@@ -308,23 +363,24 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Shield className="w-6 h-6" />
-            Admin Panel
-          </h2>
-          <p className="text-muted-foreground">
-            Verwalte Punkte und Aufgaben für dein Household
-          </p>
+    <TooltipProvider>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Shield className="w-6 h-6" />
+              Admin Panel
+            </h2>
+            <p className="text-muted-foreground">
+              Verwalte Punkte, Aufgaben und Rollen für dein Household
+            </p>
+          </div>
+          <Badge variant="secondary" className="bg-gradient-primary text-white">
+            Administrator
+          </Badge>
         </div>
-        <Badge variant="secondary" className="bg-gradient-primary text-white">
-          Administrator
-        </Badge>
-      </div>
 
-      <Tabs defaultValue="tasks" className="w-full">
+        <Tabs defaultValue="tasks" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tasks" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
@@ -349,7 +405,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
             <CardHeader>
               <CardTitle>Aufgaben-Punktewerte bearbeiten</CardTitle>
               <CardDescription>
-                Passe die Punktewerte für bestehende Aufgaben an.
+                Passe die Punktewerte für bestehende Aufgaben an. Nur Admins und Moderatoren können Aufgaben bearbeiten.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -377,32 +433,53 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                             }))}
                             className="w-20"
                           />
-                          <Button
-                            size="sm"
-                            onClick={() => updateTaskPoints(task.id, tempPoints[task.id] || task.current_points)}
-                          >
-                            <Save className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={cancelEditing}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                onClick={() => updateTaskPoints(task.id, tempPoints[task.id] || task.current_points)}
+                              >
+                                <Save className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Punktewert speichern</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelEditing}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Bearbeitung abbrechen</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </>
                       ) : (
                         <>
                           <Badge variant="secondary">
                             {task.current_points} Punkte
                           </Badge>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => startEditingTask(task.id, task.current_points)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => startEditingTask(task.id, task.current_points)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Punktewert bearbeiten</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </>
                       )}
                     </div>
@@ -422,68 +499,151 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
         <TabsContent value="users" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Benutzer-Punkte verwalten</CardTitle>
+              <CardTitle>Benutzer- & Rollenverwaltung</CardTitle>
               <CardDescription>
-                Korrigiere oder passe die Punktestände der Benutzer an.
+                Verwalte Punkte und Rollen der Haushaltsmitglieder. Verschiedene Rollen haben unterschiedliche Befugnisse.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {users.map((user) => (
-                  <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                        <Award className="w-5 h-5 text-primary" />
+                  <div key={user.id} className="p-4 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <Award className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{user.display_name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Benutzer-ID: {user.user_id.slice(0, 8)}...
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-medium">{user.display_name}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Benutzer-ID: {user.user_id.slice(0, 8)}...
-                        </p>
+                      
+                      <div className="flex items-center gap-2">
+                        {editingUser === user.id ? (
+                          <>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="10000"
+                              value={tempPoints[user.id] || user.total_points}
+                              onChange={(e) => setTempPoints(prev => ({
+                                ...prev,
+                                [user.id]: parseInt(e.target.value) || 0
+                              }))}
+                              className="w-24"
+                            />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateUserPoints(user.id, tempPoints[user.id] || user.total_points)}
+                                >
+                                  <Save className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Punkte speichern</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={cancelEditing}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Abbrechen</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="secondary" className="text-lg px-3 py-1">
+                              {user.total_points} Punkte
+                            </Badge>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => startEditingUser(user.id, user.total_points)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Punkte bearbeiten</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </>
+                        )}
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      {editingUser === user.id ? (
-                        <>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="10000"
-                            value={tempPoints[user.id] || user.total_points}
-                            onChange={(e) => setTempPoints(prev => ({
-                              ...prev,
-                              [user.id]: parseInt(e.target.value) || 0
-                            }))}
-                            className="w-24"
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => updateUserPoints(user.id, tempPoints[user.id] || user.total_points)}
-                          >
-                            <Save className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={cancelEditing}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Badge variant="secondary" className="text-lg px-3 py-1">
-                            {user.total_points} Punkte
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => startEditingUser(user.id, user.total_points)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Rolle:</span>
+                        {getRoleBadge(user.role)}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button className="text-muted-foreground hover:text-foreground">
+                              <AlertCircle className="w-4 h-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p>{getRoleDescription(user.role)}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      
+                      {user.user_id !== userId && (
+                        <Select
+                          value={user.role}
+                          onValueChange={(value: 'admin' | 'moderator' | 'member') => updateUserRole(user.id, value)}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Rolle wählen" />
+                              </SelectTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Rolle des Mitglieds ändern</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <SelectContent>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Crown className="w-4 h-4" />
+                                Administrator
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="moderator">
+                              <div className="flex items-center gap-2">
+                                <UserCog className="w-4 h-4" />
+                                Moderator
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="member">
+                              <div className="flex items-center gap-2">
+                                <Users className="w-4 h-4" />
+                                Mitglied
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {user.user_id === userId && (
+                        <span className="text-sm text-muted-foreground italic">
+                          (Du selbst - Rolle kann nicht geändert werden)
+                        </span>
                       )}
                     </div>
                   </div>
@@ -500,10 +660,17 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                 <span>Haushalt-Einladungen</span>
                 <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-secondary">
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Neue Einladung
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button className="bg-gradient-secondary">
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Neue Einladung
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Neue Mitglieder per E-Mail einladen</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
@@ -653,6 +820,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 };
