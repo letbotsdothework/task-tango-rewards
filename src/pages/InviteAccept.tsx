@@ -13,6 +13,7 @@ interface InviteData {
   id: string;
   household_id: string;
   invited_email: string;
+  invited_role: 'admin' | 'moderator' | 'member';
   expires_at: string;
   is_accepted: boolean;
   households: {
@@ -66,6 +67,7 @@ export const InviteAccept = () => {
           id,
           household_id,
           invited_email,
+          invited_role,
           expires_at,
           is_accepted,
           invited_by
@@ -116,10 +118,13 @@ export const InviteAccept = () => {
 
     setIsAccepting(true);
     try {
-      // Update user's household
+      // Update user's household and role
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ household_id: invite.household_id })
+        .update({ 
+          household_id: invite.household_id,
+          role: invite.invited_role
+        })
         .eq('user_id', user.id);
 
       if (profileError) throw profileError;

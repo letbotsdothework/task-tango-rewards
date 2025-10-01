@@ -57,6 +57,7 @@ export type Database = {
           invite_token: string
           invited_by: string
           invited_email: string
+          invited_role: Database["public"]["Enums"]["app_role"]
           is_accepted: boolean
           updated_at: string
         }
@@ -69,6 +70,7 @@ export type Database = {
           invite_token?: string
           invited_by: string
           invited_email: string
+          invited_role?: Database["public"]["Enums"]["app_role"]
           is_accepted?: boolean
           updated_at?: string
         }
@@ -81,6 +83,7 @@ export type Database = {
           invite_token?: string
           invited_by?: string
           invited_email?: string
+          invited_role?: Database["public"]["Enums"]["app_role"]
           is_accepted?: boolean
           updated_at?: string
         }

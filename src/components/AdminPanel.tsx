@@ -43,6 +43,7 @@ interface HouseholdInvite {
   is_accepted: boolean;
   created_at: string;
   accepted_at: string | null;
+  invited_role: 'admin' | 'moderator' | 'member';
 }
 
 export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: AdminPanelProps) => {
@@ -57,6 +58,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
   // Invite form state
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'moderator' | 'member'>('member');
   const [isInviting, setIsInviting] = useState(false);
   const [householdName, setHouseholdName] = useState('');
   const [inviterName, setInviterName] = useState('');
@@ -128,7 +130,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     try {
       const { data, error } = await supabase
         .from('household_invites')
-        .select('id, invited_email, expires_at, is_accepted, created_at, accepted_at')
+        .select('id, invited_email, expires_at, is_accepted, created_at, accepted_at, invited_role')
         .eq('household_id', householdId)
         .order('created_at', { ascending: false });
 
@@ -282,6 +284,31 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
     return descriptions[role as keyof typeof descriptions] || descriptions.member;
   };
 
+  const deleteInvite = async (inviteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('household_invites')
+        .delete()
+        .eq('id', inviteId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Einladung gelöscht",
+        description: "Die Einladung wurde erfolgreich zurückgezogen.",
+      });
+
+      fetchInvites();
+    } catch (error: any) {
+      console.error('Error deleting invite:', error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Fehler beim Löschen der Einladung.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const sendInvite = async () => {
     if (!inviteEmail.trim()) {
       toast({
@@ -315,6 +342,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
           invitedEmail: inviteEmail.trim(),
           householdName,
           inviterName,
+          invitedRole: inviteRole,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -329,6 +357,7 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
       });
 
       setInviteEmail('');
+      setInviteRole('member');
       setIsInviteDialogOpen(false);
       fetchInvites(); // Refresh invites list
     } catch (error: any) {
@@ -691,6 +720,43 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                           disabled={isInviting}
                         />
                       </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite-role">Rolle *</Label>
+                        <Select value={inviteRole} onValueChange={(value: 'admin' | 'moderator' | 'member') => setInviteRole(value)}>
+                          <SelectTrigger id="invite-role">
+                            <SelectValue placeholder="Rolle wählen" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="member">
+                              <div className="flex items-center gap-2">
+                                <Users className="w-4 h-4" />
+                                <div>
+                                  <div className="font-medium">Mitglied</div>
+                                  <div className="text-xs text-muted-foreground">Kann Aufgaben abschließen und Belohnungen beanspruchen</div>
+                                </div>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="moderator">
+                              <div className="flex items-center gap-2">
+                                <UserCog className="w-4 h-4" />
+                                <div>
+                                  <div className="font-medium">Moderator</div>
+                                  <div className="text-xs text-muted-foreground">Kann Aufgaben und Kategorien erstellen und bearbeiten</div>
+                                </div>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Crown className="w-4 h-4" />
+                                <div>
+                                  <div className="font-medium">Administrator</div>
+                                  <div className="text-xs text-muted-foreground">Kann alles verwalten</div>
+                                </div>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button 
@@ -740,14 +806,18 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                       </div>
                       <div>
                         <h4 className="font-medium">{invite.invited_email}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {invite.is_accepted
-                            ? `Akzeptiert am ${format(new Date(invite.accepted_at!), 'dd.MM.yyyy HH:mm')}`
-                            : new Date(invite.expires_at) < new Date()
-                            ? `Abgelaufen am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
-                            : `Läuft ab am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
-                          }
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-muted-foreground">
+                            {invite.is_accepted
+                              ? `Akzeptiert am ${format(new Date(invite.accepted_at!), 'dd.MM.yyyy HH:mm')}`
+                              : new Date(invite.expires_at) < new Date()
+                              ? `Abgelaufen am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
+                              : `Läuft ab am ${format(new Date(invite.expires_at), 'dd.MM.yyyy')}`
+                            }
+                          </p>
+                          <span className="text-muted-foreground">•</span>
+                          {getRoleBadge(invite.invited_role)}
+                        </div>
                       </div>
                     </div>
                     
@@ -766,6 +836,22 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
                           : "Ausstehend"
                         }
                       </Badge>
+                      {!invite.is_accepted && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteInvite(invite.id)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Einladung zurückziehen</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                   </div>
                 ))}

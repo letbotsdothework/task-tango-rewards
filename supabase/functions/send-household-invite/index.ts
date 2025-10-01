@@ -14,6 +14,7 @@ interface InviteRequest {
   invitedEmail: string;
   householdName: string;
   inviterName: string;
+  invitedRole?: 'admin' | 'moderator' | 'member';
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -49,12 +50,21 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const { householdId, invitedEmail, householdName, inviterName }: InviteRequest = await req.json();
+    const { householdId, invitedEmail, householdName, inviterName, invitedRole = 'member' }: InviteRequest = await req.json();
 
     // Validate input
     if (!householdId || !invitedEmail || !householdName || !inviterName) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate role
+    const validRoles = ['admin', 'moderator', 'member'];
+    if (!validRoles.includes(invitedRole)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid role specified" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -116,6 +126,7 @@ const handler = async (req: Request): Promise<Response> => {
           household_id: householdId,
           invited_email: invitedEmail,
           invited_by: user.id,
+          invited_role: invitedRole,
         }])
         .select('invite_token')
         .single();
