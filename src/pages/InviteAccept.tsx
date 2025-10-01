@@ -73,10 +73,15 @@ export const InviteAccept = () => {
           invited_by
         `)
         .eq('invite_token', token)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching invite:', error);
+        setError('Einladung nicht gefunden oder abgelaufen.');
+        return;
+      }
+
+      if (!data) {
         setError('Einladung nicht gefunden oder abgelaufen.');
         return;
       }
@@ -94,7 +99,7 @@ export const InviteAccept = () => {
       // Get household and inviter info separately
       const [householdResult, inviterResult] = await Promise.all([
         supabase.from('households').select('name').eq('id', data.household_id).single(),
-        supabase.from('profiles').select('display_name').eq('id', data.invited_by).single()
+        supabase.from('profiles').select('display_name').eq('user_id', data.invited_by).maybeSingle()
       ]);
 
       const inviteData = {
