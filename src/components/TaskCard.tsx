@@ -69,9 +69,28 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
     setIsCompleting(true);
     
     try {
+      // First, check if task is still incomplete (prevent race conditions)
+      const { data: currentTask, error: checkError } = await supabase
+        .from('tasks')
+        .select('status, completed_at')
+        .eq('id', task.id)
+        .single();
+
+      if (checkError) throw checkError;
+
+      if (currentTask.status === 'completed') {
+        toast({
+          title: "Task already completed",
+          description: "This task has already been marked as complete.",
+          variant: "destructive",
+        });
+        onTaskUpdate();
+        return;
+      }
+
       const completedAt = new Date().toISOString();
       
-      // Update task status
+      // Update task status atomically
       const { error: taskError } = await supabase
         .from('tasks')
         .update({
@@ -80,7 +99,8 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
           // If it's a group task (unassigned), assign it to the current user who completed it
           assigned_to: task.assigned_to || currentUserId
         })
-        .eq('id', task.id);
+        .eq('id', task.id)
+        .eq('status', 'pending'); // Only update if still pending (atomic check)
 
       if (taskError) throw taskError;
 
@@ -95,7 +115,7 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
         
         if (completed <= deadline) {
           totalPoints += task.bonus_points;
-          bonusMessage = ` + ${task.bonus_points} bonus points for completing the challenge on time!`;
+          bonusMessage = ` + ${task.bonus_points} Bonuspunkte für das rechtzeitige Abschließen der Challenge!`;
         }
       }
 
@@ -118,17 +138,18 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
       if (updateError) throw updateError;
 
       toast({
-        title: "Task completed! 🎉",
-        description: `You earned ${totalPoints} points for completing "${task.title}"${bonusMessage}`,
+        title: "Aufgabe erledigt! 🎉",
+        description: `Du hast ${totalPoints} Punkte für "${task.title}" erhalten${bonusMessage}`,
       });
 
+      // Immediately trigger update to move task to completed section
       onTaskUpdate();
       
     } catch (error: any) {
       console.error('Error completing task:', error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to complete task.",
+        title: "Fehler",
+        description: error.message || "Aufgabe konnte nicht abgeschlossen werden.",
         variant: "destructive",
       });
     } finally {
