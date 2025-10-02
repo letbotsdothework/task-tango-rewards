@@ -357,10 +357,12 @@ const Dashboard = () => {
                           <CardTitle>Deine Aufgaben</CardTitle>
                           <CardDescription>Verwalte und erledige deine Household-Aufgaben</CardDescription>
                         </div>
-                        <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Aufgabe hinzufügen
-                        </Button>
+                        {(profile.role === 'admin' || profile.role === 'moderator') && (
+                          <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Aufgabe hinzufügen
+                          </Button>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -368,11 +370,17 @@ const Dashboard = () => {
                         <div className="text-center py-8">
                           <Target className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
                           <h3 className="text-lg font-medium mb-2">Noch keine Aufgaben</h3>
-                          <p className="text-muted-foreground mb-4">Erstelle deine erste Aufgabe um zu beginnen!</p>
-                          <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Erste Aufgabe erstellen
-                          </Button>
+                          <p className="text-muted-foreground mb-4">
+                            {profile.role === 'admin' || profile.role === 'moderator' 
+                              ? 'Erstelle deine erste Aufgabe um zu beginnen!' 
+                              : 'Es gibt noch keine Aufgaben. Ein Admin oder Moderator kann welche erstellen.'}
+                          </p>
+                          {(profile.role === 'admin' || profile.role === 'moderator') && (
+                            <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Erste Aufgabe erstellen
+                            </Button>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-4">
