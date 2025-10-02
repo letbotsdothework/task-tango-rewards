@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle, Clock, User, Calendar, Loader2, Trash2 } from 'lucide-react';
+import { CheckCircle, User, Calendar, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -69,11 +69,12 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
   };
 
   const canCompleteTask = () => {
-    // User can complete if:
-    // 1. Task is not already completed
-    // 2. Task is assigned to them OR task is unassigned (group task)
     return task.status !== 'completed' && 
            (task.assigned_to === currentUserId || task.assigned_to === null);
+  };
+
+  const canDeleteTask = () => {
+    return userRole === 'admin' || userRole === 'moderator';
   };
 
   const handleCompleteTask = async () => {
@@ -82,7 +83,6 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
     setIsCompleting(true);
     
     try {
-      // First, check if task is still incomplete (prevent race conditions)
       const { data: currentTask, error: checkError } = await supabase
         .from('tasks')
         .select('status, completed_at')
@@ -93,8 +93,8 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
 
       if (currentTask.status === 'completed') {
         toast({
-          title: "Task already completed",
-          description: "This task has already been marked as complete.",
+          title: "Aufgabe bereits erledigt",
+          description: "Diese Aufgabe wurde bereits abgeschlossen.",
           variant: "destructive",
         });
         onTaskUpdate();
@@ -103,36 +103,31 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
 
       const completedAt = new Date().toISOString();
       
-      // Update task status atomically
       const { error: taskError } = await supabase
         .from('tasks')
         .update({
           status: 'completed',
           completed_at: completedAt,
-          // If it's a group task (unassigned), assign it to the current user who completed it
           assigned_to: task.assigned_to || currentUserId
         })
         .eq('id', task.id)
-        .eq('status', 'pending'); // Only update if still pending (atomic check)
+        .eq('status', 'pending');
 
       if (taskError) throw taskError;
 
-      // Calculate total points including bonus for challenge tasks
       let totalPoints = task.points;
       let bonusMessage = '';
       
-      // Check if it's a challenge task completed before deadline
       if (task.is_challenge && task.challenge_deadline && task.bonus_points > 0) {
         const deadline = new Date(task.challenge_deadline);
         const completed = new Date(completedAt);
         
         if (completed <= deadline) {
           totalPoints += task.bonus_points;
-          bonusMessage = ` + ${task.bonus_points} Bonuspunkte für das rechtzeitige Abschließen der Challenge!`;
+          bonusMessage = ` + ${task.bonus_points} Bonuspunkte für das rechtzeitige Abschließen!`;
         }
       }
 
-      // Award points to the user
       const { data: currentProfile, error: fetchError } = await supabase
         .from('profiles')
         .select('total_points')
@@ -155,7 +150,6 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
         description: `Du hast ${totalPoints} Punkte für "${task.title}" erhalten${bonusMessage}`,
       });
 
-      // Immediately trigger update to move task to completed section
       onTaskUpdate();
       
     } catch (error: any) {
@@ -200,10 +194,6 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
     }
   };
 
-  const canDeleteTask = () => {
-    return userRole === 'admin' || userRole === 'moderator';
-  };
-
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
 
   return (
@@ -215,7 +205,6 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-2">
-            {/* Title and Status */}
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className={cn(
                 "font-medium",
@@ -231,19 +220,17 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
               </Badge>
               {isOverdue && (
                 <Badge variant="destructive">
-                  Overdue
+                  Überfällig
                 </Badge>
               )}
             </div>
 
-            {/* Description */}
             {task.description && (
               <p className="text-sm text-muted-foreground">
                 {task.description}
               </p>
             )}
 
-            {/* Meta Information */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               {task.assignee && (
                 <div className="flex items-center gap-1">
@@ -254,25 +241,24 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
               {!task.assigned_to && (
                 <div className="flex items-center gap-1">
                   <User className="w-3 h-3" />
-                  <span>Group Task</span>
+                  <span>Gruppenaufgabe</span>
                 </div>
               )}
               {task.due_date && (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
-                  <span>Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                  <span>Fällig: {new Date(task.due_date).toLocaleDateString()}</span>
                 </div>
               )}
               {task.completed_at && (
                 <div className="flex items-center gap-1">
                   <CheckCircle className="w-3 h-3 text-success" />
-                  <span>Completed: {new Date(task.completed_at).toLocaleDateString()}</span>
+                  <span>Erledigt: {new Date(task.completed_at).toLocaleDateString()}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Points and Action */}
           <div className="flex flex-col items-end gap-2">
             <div className="text-right">
               <div className="font-bold text-primary text-lg">
