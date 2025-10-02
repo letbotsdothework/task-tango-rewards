@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trophy, Target, Clock, LogOut, Users, Home, Gift, BarChart3, Shield } from 'lucide-react';
+import { Plus, Trophy, Target, Clock, LogOut, Users, Home, Gift, BarChart3, Shield, CheckCircle } from 'lucide-react';
 import { CreateHouseholdDialog } from '@/components/CreateHouseholdDialog';
 import { JoinHouseholdDialog } from '@/components/JoinHouseholdDialog';
 import { CreateTaskDialog } from '@/components/CreateTaskDialog';
@@ -62,6 +62,7 @@ const Dashboard = () => {
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [completedDaysFilter, setCompletedDaysFilter] = useState(7);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -203,12 +204,26 @@ const Dashboard = () => {
     fetchTasks();
   };
 
+  const getActiveTasks = () => {
+    return tasks.filter(t => t.status !== 'completed');
+  };
+
+  const getCompletedTasksInRange = () => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - completedDaysFilter);
+    return tasks.filter(t => 
+      t.status === 'completed' && 
+      t.completed_at && 
+      new Date(t.completed_at) >= cutoffDate
+    );
+  };
+
   const getPendingTasksCount = () => {
     return tasks.filter(t => t.status === 'pending').length;
   };
 
   const getCompletedTasksCount = () => {
-    return tasks.filter(t => t.status === 'completed').length;
+    return getCompletedTasksInRange().length;
   };
 
   const getUserTasksCount = () => {
@@ -300,16 +315,33 @@ const Dashboard = () => {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-8">
+              {/* Time Filter */}
+              <div className="flex justify-end items-center gap-4">
+                <label className="text-sm text-muted-foreground">Erledigte Aufgaben der letzten:</label>
+                <div className="flex gap-2">
+                  {[7, 14, 30].map((days) => (
+                    <Button
+                      key={days}
+                      variant={completedDaysFilter === days ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCompletedDaysFilter(days)}
+                    >
+                      {days} Tage
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               {/* Statistics Cards */}
               <div className="grid gap-4 md:grid-cols-4">
                 <Card className="hover:shadow-medium transition-shadow">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Gesamt Aufgaben</CardTitle>
+                    <CardTitle className="text-sm font-medium">Aktive Aufgaben</CardTitle>
                     <Target className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{tasks.length}</div>
-                    <p className="text-xs text-muted-foreground">Alle Household-Aufgaben</p>
+                    <div className="text-2xl font-bold">{getActiveTasks().length}</div>
+                    <p className="text-xs text-muted-foreground">Zu erledigen</p>
                   </CardContent>
                 </Card>
                 
@@ -354,8 +386,8 @@ const Dashboard = () => {
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div>
-                          <CardTitle>Deine Aufgaben</CardTitle>
-                          <CardDescription>Verwalte und erledige deine Household-Aufgaben</CardDescription>
+                          <CardTitle>Aktive Aufgaben</CardTitle>
+                          <CardDescription>Alle offenen Aufgaben des Haushalts</CardDescription>
                         </div>
                         {(profile.role === 'admin' || profile.role === 'moderator') && (
                           <Button onClick={() => setShowCreateTaskDialog(true)} className="bg-gradient-primary">
@@ -366,13 +398,13 @@ const Dashboard = () => {
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {tasks.length === 0 ? (
+                      {getActiveTasks().length === 0 ? (
                         <div className="text-center py-8">
                           <Target className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-                          <h3 className="text-lg font-medium mb-2">Noch keine Aufgaben</h3>
+                          <h3 className="text-lg font-medium mb-2">Keine aktiven Aufgaben</h3>
                           <p className="text-muted-foreground mb-4">
                             {profile.role === 'admin' || profile.role === 'moderator' 
-                              ? 'Erstelle deine erste Aufgabe um zu beginnen!' 
+                              ? 'Erstelle eine neue Aufgabe um zu beginnen!' 
                               : 'Es gibt noch keine Aufgaben. Ein Admin oder Moderator kann welche erstellen.'}
                           </p>
                           {(profile.role === 'admin' || profile.role === 'moderator') && (
@@ -384,21 +416,53 @@ const Dashboard = () => {
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {tasks.slice(0, 6).map((task) => (
-                            <TaskCard
+                          {getActiveTasks().map((task) => (
+                            <div
                               key={task.id}
-                              task={task}
-                              currentUserId={profile.id}
-                              onTaskUpdate={handleHouseholdSuccess}
-                            />
-                          ))}
-                          {tasks.length > 6 && (
-                            <div className="text-center pt-4">
-                              <p className="text-muted-foreground">
-                                ...und {tasks.length - 6} weitere Aufgaben
-                              </p>
+                              className={task.assigned_to === profile.id ? 'ring-2 ring-primary/20 rounded-lg' : ''}
+                            >
+                              <TaskCard
+                                task={task}
+                                currentUserId={profile.id}
+                                onTaskUpdate={handleHouseholdSuccess}
+                              />
                             </div>
-                          )}
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Completed Tasks Section */}
+                  <Card className="mt-6">
+                    <CardHeader>
+                      <CardTitle>Erledigte Aufgaben</CardTitle>
+                      <CardDescription>
+                        Abgeschlossene Aufgaben der letzten {completedDaysFilter} Tage
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {getCompletedTasksInRange().length === 0 ? (
+                        <div className="text-center py-8">
+                          <CheckCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+                          <p className="text-muted-foreground">
+                            Keine erledigten Aufgaben in diesem Zeitraum
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {getCompletedTasksInRange().map((task) => (
+                            <div
+                              key={task.id}
+                              className={task.assigned_to === profile.id ? 'ring-2 ring-primary/20 rounded-lg' : ''}
+                            >
+                              <TaskCard
+                                task={task}
+                                currentUserId={profile.id}
+                                onTaskUpdate={handleHouseholdSuccess}
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
                     </CardContent>
