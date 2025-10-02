@@ -4,8 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle, Clock, User, Calendar, Loader2 } from 'lucide-react';
+import { CheckCircle, Clock, User, Calendar, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Task {
   id: string;
@@ -29,11 +40,13 @@ interface Task {
 interface TaskCardProps {
   task: Task;
   currentUserId: string;
+  userRole: 'admin' | 'moderator' | 'member';
   onTaskUpdate: () => void;
 }
 
-export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) => {
+export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCardProps) => {
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   const getPriorityColor = (priority: string) => {
@@ -157,6 +170,40 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
     }
   };
 
+  const handleDeleteTask = async () => {
+    setIsDeleting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', task.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Aufgabe gelöscht",
+        description: `"${task.title}" wurde erfolgreich gelöscht.`,
+      });
+
+      onTaskUpdate();
+      
+    } catch (error: any) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Aufgabe konnte nicht gelöscht werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const canDeleteTask = () => {
+    return userRole === 'admin' || userRole === 'moderator';
+  };
+
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
 
   return (
@@ -233,33 +280,67 @@ export const TaskCard = ({ task, currentUserId, onTaskUpdate }: TaskCardProps) =
               </div>
             </div>
             
-            {canCompleteTask() && (
-              <Button
-                size="sm"
-                onClick={handleCompleteTask}
-                disabled={isCompleting}
-                className="bg-success hover:bg-success/90 text-success-foreground"
-              >
-                {isCompleting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                    Completing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Complete
-                  </>
-                )}
-              </Button>
-            )}
-            
-            {task.status === 'completed' && (
-              <Badge variant="outline" className="text-success border-success">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Done
-              </Badge>
-            )}
+            <div className="flex gap-2">
+              {canCompleteTask() && (
+                <Button
+                  size="sm"
+                  onClick={handleCompleteTask}
+                  disabled={isCompleting}
+                  className="bg-success hover:bg-success/90 text-success-foreground"
+                >
+                  {isCompleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      Wird erledigt...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-1" />
+                      Erledigen
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {task.status === 'completed' && (
+                <Badge variant="outline" className="text-success border-success">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Erledigt
+                </Badge>
+              )}
+
+              {canDeleteTask() && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Aufgabe löschen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Möchtest du "{task.title}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteTask}>
+                        Löschen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>

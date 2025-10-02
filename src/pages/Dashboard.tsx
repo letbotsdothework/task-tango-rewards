@@ -424,6 +424,7 @@ const Dashboard = () => {
                               <TaskCard
                                 task={task}
                                 currentUserId={profile.id}
+                                userRole={profile.role as 'admin' | 'moderator' | 'member'}
                                 onTaskUpdate={handleHouseholdSuccess}
                               />
                             </div>
@@ -459,6 +460,7 @@ const Dashboard = () => {
                               <TaskCard
                                 task={task}
                                 currentUserId={profile.id}
+                                userRole={profile.role as 'admin' | 'moderator' | 'member'}
                                 onTaskUpdate={handleHouseholdSuccess}
                               />
                             </div>
