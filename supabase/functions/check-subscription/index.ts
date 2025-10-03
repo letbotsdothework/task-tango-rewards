@@ -115,7 +115,6 @@ serve(async (req) => {
           logStep("Searching for active subscriptions by customer", { customerId: subscription.stripe_customer_id });
           const subscriptions = await stripe.subscriptions.list({
             customer: subscription.stripe_customer_id,
-            status: 'active',
             limit: 1
           });
           
@@ -165,7 +164,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({
             plan,
             status: stripeSubscription.status,
-            hasActiveSub: stripeSubscription.status === 'active',
+            hasActiveSub: stripeSubscription.status === 'active' || stripeSubscription.status === 'trialing',
             subscriptionEnd: new Date(stripeSubscription.current_period_end * 1000).toISOString()
           }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
