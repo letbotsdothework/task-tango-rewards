@@ -89,6 +89,50 @@ export type Database = {
         }
         Relationships: []
       }
+      household_subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          household_id: string
+          id: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          household_id: string
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          household_id?: string
+          id?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_subscriptions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       households: {
         Row: {
           created_at: string
@@ -423,6 +467,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "member" | "moderator"
+      subscription_plan: "free" | "pro" | "premium"
+      subscription_status: "active" | "canceled" | "past_due" | "incomplete"
       task_priority: "low" | "medium" | "high"
       task_status: "pending" | "in_progress" | "completed" | "overdue"
     }
@@ -553,6 +599,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "member", "moderator"],
+      subscription_plan: ["free", "pro", "premium"],
+      subscription_status: ["active", "canceled", "past_due", "incomplete"],
       task_priority: ["low", "medium", "high"],
       task_status: ["pending", "in_progress", "completed", "overdue"],
     },
