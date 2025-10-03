@@ -98,51 +98,80 @@ serve(async (req) => {
       throw subError;
     }
 
-    // If there's a Stripe subscription ID, check its status with Stripe
-    if (subscription.stripe_subscription_id) {
-      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-      logStep("Fetching Stripe subscription", { subId: subscription.stripe_subscription_id });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
+    // Check Stripe for active subscriptions regardless of whether we have a subscription ID stored
+    // This helps recover from cases where the webhook didn't update our DB
+    if (subscription.stripe_customer_id || subscription.stripe_subscription_id) {
       try {
-        const stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
-        logStep("Retrieved Stripe subscription", { status: stripeSubscription.status });
+        let stripeSubscription;
+        
+        if (subscription.stripe_subscription_id) {
+          // We have a subscription ID, try to retrieve it directly
+          logStep("Fetching Stripe subscription by ID", { subId: subscription.stripe_subscription_id });
+          stripeSubscription = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+        } else if (subscription.stripe_customer_id) {
+          // We have a customer ID but no subscription ID, search for active subscriptions
+          logStep("Searching for active subscriptions by customer", { customerId: subscription.stripe_customer_id });
+          const subscriptions = await stripe.subscriptions.list({
+            customer: subscription.stripe_customer_id,
+            status: 'active',
+            limit: 1
+          });
+          
+          if (subscriptions.data.length > 0) {
+            stripeSubscription = subscriptions.data[0];
+            logStep("Found active subscription via customer search", { subId: stripeSubscription.id });
+          } else {
+            logStep("No active subscriptions found for customer");
+          }
+        }
 
-        // Update local database if status changed
-        if (stripeSubscription.status !== subscription.status) {
+        if (stripeSubscription) {
+          logStep("Retrieved Stripe subscription", { status: stripeSubscription.status });
+
+          // Determine plan from Stripe subscription
+          const priceId = stripeSubscription.items.data[0]?.price.id;
+          let plan: 'free' | 'pro' | 'premium' = 'free';
+          
+          if (priceId === 'price_1SE5nbQ3CK1F4xQw5BomKeun') {
+            plan = 'pro';
+          } else if (priceId === 'price_1SE5nuQ3CK1F4xQwqBtiKcfr') {
+            plan = 'premium';
+          }
+
           const newStatus = stripeSubscription.status === 'active' ? 'active' :
                            stripeSubscription.status === 'canceled' ? 'canceled' :
                            stripeSubscription.status === 'past_due' ? 'past_due' : 'incomplete';
 
-          await supabaseClient
-            .from('household_subscriptions')
-            .update({ 
-              status: newStatus,
-              current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString()
-            })
-            .eq('id', subscription.id);
+          // Update database if anything changed
+          if (plan !== subscription.plan || 
+              newStatus !== subscription.status || 
+              !subscription.stripe_subscription_id) {
+            
+            await supabaseClient
+              .from('household_subscriptions')
+              .update({ 
+                plan,
+                status: newStatus,
+                stripe_subscription_id: stripeSubscription.id,
+                current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString()
+              })
+              .eq('id', subscription.id);
 
-          logStep("Updated subscription status", { newStatus });
+            logStep("Updated subscription in database", { plan, status: newStatus });
+          }
+
+          return new Response(JSON.stringify({
+            plan,
+            status: stripeSubscription.status,
+            hasActiveSub: stripeSubscription.status === 'active',
+            subscriptionEnd: new Date(stripeSubscription.current_period_end * 1000).toISOString()
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
         }
-
-        // Determine plan from Stripe subscription
-        const priceId = stripeSubscription.items.data[0]?.price.id;
-        let plan = subscription.plan; // Default to existing
-        
-        if (priceId === 'price_1SE5nbQ3CK1F4xQw5BomKeun') {
-          plan = 'pro';
-        } else if (priceId === 'price_1SE5nuQ3CK1F4xQwqBtiKcfr') {
-          plan = 'premium';
-        }
-
-        return new Response(JSON.stringify({
-          plan,
-          status: stripeSubscription.status,
-          hasActiveSub: stripeSubscription.status === 'active',
-          subscriptionEnd: new Date(stripeSubscription.current_period_end * 1000).toISOString()
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
       } catch (stripeError: any) {
         logStep("Stripe error", { error: stripeError.message });
         // If subscription not found in Stripe, reset to free
@@ -155,6 +184,8 @@ serve(async (req) => {
               stripe_subscription_id: null
             })
             .eq('id', subscription.id);
+          
+          logStep("Reset to free plan - subscription not found in Stripe");
         }
       }
     }
