@@ -3,7 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { CreditCard, Check, Zap, Crown, Shield } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { CreditCard, Check, Zap, Crown, Shield, Loader2, ExternalLink } from 'lucide-react';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface SubscriptionManagementProps {
   householdId: string;
@@ -17,6 +19,7 @@ const plans = [
     price: '0€',
     interval: 'kostenlos',
     icon: Shield,
+    priceId: null,
     features: [
       'Bis zu 10 aktive Aufgaben',
       'Grundlegende Belohnungen',
@@ -31,9 +34,10 @@ const plans = [
     price: '4,99€',
     interval: 'pro Monat',
     icon: Zap,
+    priceId: 'price_1SE5nbQ3CK1F4xQw5BomKeun',
     features: [
       'Unbegrenzte Aufgaben',
-      'Erweiterte Belohnungen',
+      '🎰 Mystery Rewards (Glücksrad)',
       'Unbegrenzte Haushaltsmitglieder',
       'Erweiterte Statistiken',
       'Aufgaben-Kategorien',
@@ -48,6 +52,7 @@ const plans = [
     price: '9,99€',
     interval: 'pro Monat',
     icon: Crown,
+    priceId: 'price_1SE5nuQ3CK1F4xQwqBtiKcfr',
     features: [
       'Alle Pro-Features',
       'Prioritäts-Support',
@@ -62,10 +67,10 @@ const plans = [
 
 export const SubscriptionManagement = ({ householdId, userRole }: SubscriptionManagementProps) => {
   const { toast } = useToast();
-  const [currentPlan, setCurrentPlan] = useState('free');
+  const { subscription, loading: subLoading, refresh } = useSubscription(householdId);
   const [loading, setLoading] = useState(false);
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = async (planId: string, priceId: string | null) => {
     if (userRole !== 'admin') {
       toast({
         title: "Keine Berechtigung",
@@ -75,24 +80,114 @@ export const SubscriptionManagement = ({ householdId, userRole }: SubscriptionMa
       return;
     }
 
+    if (!priceId) {
+      toast({
+        title: "Info",
+        description: "Der kostenlose Plan ist bereits aktiv.",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // TODO: Implement Stripe checkout
-      toast({
-        title: "Coming Soon",
-        description: "Stripe Integration wird implementiert...",
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId, householdId }
       });
-    } catch (error) {
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        // Open Stripe Checkout in new tab
+        window.open(data.url, '_blank');
+        toast({
+          title: "Checkout geöffnet",
+          description: "Bitte schließen Sie den Zahlungsvorgang im neuen Tab ab.",
+        });
+      }
+    } catch (error: any) {
       console.error('Subscription error:', error);
       toast({
         title: "Fehler",
-        description: "Subscription konnte nicht geändert werden.",
+        description: error.message || "Subscription konnte nicht gestartet werden.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  const handleManageSubscription = async () => {
+    if (userRole !== 'admin') {
+      toast({
+        title: "Keine Berechtigung",
+        description: "Nur Admins können die Subscription verwalten.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal', {
+        body: { householdId }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        window.open(data.url, '_blank');
+        toast({
+          title: "Portal geöffnet",
+          description: "Verwalten Sie Ihre Subscription im neuen Tab.",
+        });
+      }
+    } catch (error: any) {
+      console.error('Portal error:', error);
+      toast({
+        title: "Fehler",
+        description: error.message || "Portal konnte nicht geöffnet werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Check for subscription success/cancel in URL
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('subscription');
+    
+    if (status === 'success') {
+      toast({
+        title: "Subscription erfolgreich!",
+        description: "Ihr Plan wurde erfolgreich aktiviert.",
+      });
+      refresh();
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (status === 'canceled') {
+      toast({
+        title: "Abgebrochen",
+        description: "Der Zahlungsvorgang wurde abgebrochen.",
+        variant: "destructive",
+      });
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  if (subLoading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -101,12 +196,17 @@ export const SubscriptionManagement = ({ householdId, userRole }: SubscriptionMa
         <p className="text-muted-foreground">
           Erweitere die Funktionen deines Haushalts
         </p>
+        {subscription.hasActiveSub && subscription.subscriptionEnd && (
+          <Badge variant="secondary" className="mt-2">
+            Aktiv bis {new Date(subscription.subscriptionEnd).toLocaleDateString('de-DE')}
+          </Badge>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
         {plans.map((plan) => {
           const Icon = plan.icon;
-          const isCurrentPlan = currentPlan === plan.id;
+          const isCurrentPlan = subscription.plan === plan.id;
           
           return (
             <Card 
@@ -151,10 +251,17 @@ export const SubscriptionManagement = ({ householdId, userRole }: SubscriptionMa
                 ) : (
                   <Button
                     className={`w-full ${plan.recommended ? 'bg-gradient-primary' : ''}`}
-                    onClick={() => handleSubscribe(plan.id)}
+                    onClick={() => handleSubscribe(plan.id, plan.priceId)}
                     disabled={loading || userRole !== 'admin'}
                   >
-                    {plan.id === 'free' ? 'Zu Basis wechseln' : 'Jetzt upgraden'}
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Lädt...
+                      </>
+                    ) : (
+                      plan.id === 'free' ? 'Zu Basis wechseln' : 'Jetzt upgraden'
+                    )}
                   </Button>
                 )}
 
@@ -168,6 +275,29 @@ export const SubscriptionManagement = ({ householdId, userRole }: SubscriptionMa
           );
         })}
       </div>
+
+      {subscription.hasActiveSub && (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold mb-1">Subscription verwalten</h3>
+                <p className="text-sm text-muted-foreground">
+                  Zahlungsmethoden ändern, Rechnungen ansehen oder kündigen
+                </p>
+              </div>
+              <Button
+                onClick={handleManageSubscription}
+                variant="outline"
+                disabled={loading || userRole !== 'admin'}
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Portal öffnen
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-muted/50">
         <CardHeader>
