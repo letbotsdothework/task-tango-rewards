@@ -15,6 +15,7 @@ import { TaskCard } from '@/components/TaskCard';
 import { Leaderboard } from '@/components/Leaderboard';
 import { RewardsSystem } from '@/components/RewardsSystem';
 import { AdminPanel } from '@/components/AdminPanel';
+import { SubscriptionManagement } from '@/components/SubscriptionManagement';
 
 interface Profile {
   id: string;
@@ -308,10 +309,12 @@ const Dashboard = () => {
                   Admin
                 </TabsTrigger>
               )}
-              <TabsTrigger value="leaderboard" className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Rangliste
-              </TabsTrigger>
+              {profile.role === 'admin' && (
+                <TabsTrigger value="subscription" className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4" />
+                  Subscription
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-8">
@@ -527,10 +530,10 @@ const Dashboard = () => {
               </TabsContent>
             )}
 
-            <TabsContent value="leaderboard">
-              <Leaderboard 
-                householdId={profile.household_id} 
-                currentUserId={profile.id} 
+            <TabsContent value="subscription">
+              <SubscriptionManagement 
+                householdId={profile.household_id!} 
+                userRole={profile.role}
               />
             </TabsContent>
           </Tabs>
