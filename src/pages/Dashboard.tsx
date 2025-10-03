@@ -515,6 +515,7 @@ const Dashboard = () => {
                 userId={profile.id} 
                 householdId={profile.household_id} 
                 userPoints={profile.total_points}
+                userRole={profile.role as 'admin' | 'moderator' | 'member'}
                 onPointsChange={fetchProfile}
               />
             </TabsContent>

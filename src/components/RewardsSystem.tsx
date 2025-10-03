@@ -16,6 +16,7 @@ interface RewardsSystemProps {
   userId: string;
   householdId: string;
   userPoints: number;
+  userRole: 'admin' | 'moderator' | 'member';
   onPointsChange?: () => void;
 }
 
@@ -46,7 +47,7 @@ interface RewardClaim {
 
 const rewardIcons = ['🎁', '🍕', '🎬', '🎮', '📚', '☕', '🍰', '🎵', '🏆', '⭐'];
 
-export const RewardsSystem = ({ userId, householdId, userPoints, onPointsChange }: RewardsSystemProps) => {
+export const RewardsSystem = ({ userId, householdId, userPoints, userRole, onPointsChange }: RewardsSystemProps) => {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [rewardClaims, setRewardClaims] = useState<RewardClaim[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -255,13 +256,14 @@ export const RewardsSystem = ({ userId, householdId, userPoints, onPointsChange 
             <Coins className="w-4 h-4 mr-2" />
             {userPoints} Punkte
           </Badge>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-gradient-secondary">
-                <Plus className="w-4 h-4 mr-2" />
-                Neue Belohnung
-              </Button>
-            </DialogTrigger>
+          {(userRole === 'admin' || userRole === 'moderator') && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-secondary">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Neue Belohnung
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Neue Belohnung erstellen</DialogTitle>
@@ -335,6 +337,7 @@ export const RewardsSystem = ({ userId, householdId, userPoints, onPointsChange 
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
