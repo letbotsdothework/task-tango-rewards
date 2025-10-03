@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { CheckCircle, User, Calendar, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MysteryWheel } from '@/components/MysteryWheel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,12 +42,15 @@ interface TaskCardProps {
   task: Task;
   currentUserId: string;
   userRole: 'admin' | 'moderator' | 'member';
+  householdId: string;
+  hasPro: boolean;
   onTaskUpdate: () => void;
 }
 
-export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCardProps) => {
+export const TaskCard = ({ task, currentUserId, userRole, householdId, hasPro, onTaskUpdate }: TaskCardProps) => {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showMysteryWheel, setShowMysteryWheel] = useState(false);
   const { toast } = useToast();
 
   const getPriorityColor = (priority: string) => {
@@ -151,6 +155,13 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
       });
 
       onTaskUpdate();
+
+      // Show Mystery Wheel if Pro/Premium and feature is enabled
+      if (hasPro) {
+        setTimeout(() => {
+          setShowMysteryWheel(true);
+        }, 1500); // 1.5 second delay after completion
+      }
       
     } catch (error: any) {
       console.error('Error completing task:', error);
@@ -330,6 +341,14 @@ export const TaskCard = ({ task, currentUserId, userRole, onTaskUpdate }: TaskCa
           </div>
         </div>
       </CardContent>
+
+      <MysteryWheel
+        open={showMysteryWheel}
+        onOpenChange={setShowMysteryWheel}
+        taskId={task.id}
+        householdId={householdId}
+        onRewardClaimed={onTaskUpdate}
+      />
     </Card>
   );
 };

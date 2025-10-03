@@ -157,6 +157,89 @@ export type Database = {
         }
         Relationships: []
       }
+      mystery_reward_configs: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          enabled: boolean
+          household_id: string
+          id: string
+          probabilities: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          household_id: string
+          id?: string
+          probabilities?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          household_id?: string
+          id?: string
+          probabilities?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mystery_reward_configs_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: true
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mystery_reward_spins: {
+        Row: {
+          household_id: string
+          id: string
+          reward_type: Database["public"]["Enums"]["mystery_reward_type"]
+          reward_value: Json
+          spun_at: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          household_id: string
+          id?: string
+          reward_type: Database["public"]["Enums"]["mystery_reward_type"]
+          reward_value: Json
+          spun_at?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          household_id?: string
+          id?: string
+          reward_type?: Database["public"]["Enums"]["mystery_reward_type"]
+          reward_value?: Json
+          spun_at?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mystery_reward_spins_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mystery_reward_spins_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -467,6 +550,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "member" | "moderator"
+      mystery_reward_type: "points" | "badge" | "voucher" | "special"
       subscription_plan: "free" | "pro" | "premium"
       subscription_status: "active" | "canceled" | "past_due" | "incomplete"
       task_priority: "low" | "medium" | "high"
@@ -599,6 +683,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "member", "moderator"],
+      mystery_reward_type: ["points", "badge", "voucher", "special"],
       subscription_plan: ["free", "pro", "premium"],
       subscription_status: ["active", "canceled", "past_due", "incomplete"],
       task_priority: ["low", "medium", "high"],

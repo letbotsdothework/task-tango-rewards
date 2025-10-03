@@ -16,6 +16,7 @@ import { Leaderboard } from '@/components/Leaderboard';
 import { RewardsSystem } from '@/components/RewardsSystem';
 import { AdminPanel } from '@/components/AdminPanel';
 import { SubscriptionManagement } from '@/components/SubscriptionManagement';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface Profile {
   id: string;
@@ -64,6 +65,9 @@ const Dashboard = () => {
   const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [completedDaysFilter, setCompletedDaysFilter] = useState(7);
+  
+  // Use subscription hook
+  const { hasPro } = useSubscription(profile?.household_id || null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -428,6 +432,8 @@ const Dashboard = () => {
                                 task={task}
                                 currentUserId={profile.id}
                                 userRole={profile.role as 'admin' | 'moderator' | 'member'}
+                                householdId={profile.household_id}
+                                hasPro={hasPro}
                                 onTaskUpdate={handleHouseholdSuccess}
                               />
                             </div>
@@ -464,6 +470,8 @@ const Dashboard = () => {
                                 task={task}
                                 currentUserId={profile.id}
                                 userRole={profile.role as 'admin' | 'moderator' | 'member'}
+                                householdId={profile.household_id}
+                                hasPro={hasPro}
                                 onTaskUpdate={handleHouseholdSuccess}
                               />
                             </div>
