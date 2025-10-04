@@ -139,9 +139,19 @@ serve(async (req) => {
             plan = 'premium';
           }
 
+          logStep("Determined plan from price", { priceId, plan });
+
           const newStatus = stripeSubscription.status === 'active' ? 'active' :
                            stripeSubscription.status === 'canceled' ? 'canceled' :
                            stripeSubscription.status === 'past_due' ? 'past_due' : 'incomplete';
+
+          // Safe conversion of current_period_end
+          const periodEndUnix = stripeSubscription.current_period_end;
+          const periodEndIso = typeof periodEndUnix === 'number' && isFinite(periodEndUnix) 
+            ? new Date(periodEndUnix * 1000).toISOString() 
+            : null;
+
+          logStep("Period end conversion", { periodEndUnix, periodEndIso });
 
           // Update database if anything changed
           if (plan !== subscription.plan || 
@@ -154,7 +164,7 @@ serve(async (req) => {
                 plan,
                 status: newStatus,
                 stripe_subscription_id: stripeSubscription.id,
-                current_period_end: new Date(stripeSubscription.current_period_end * 1000).toISOString()
+                current_period_end: periodEndIso
               })
               .eq('id', subscription.id);
 
@@ -165,7 +175,7 @@ serve(async (req) => {
             plan,
             status: stripeSubscription.status,
             hasActiveSub: stripeSubscription.status === 'active' || stripeSubscription.status === 'trialing',
-            subscriptionEnd: new Date(stripeSubscription.current_period_end * 1000).toISOString()
+            subscriptionEnd: periodEndIso
           }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200,
