@@ -12,6 +12,7 @@ import { Shield, Edit, Save, X, Users, Award, BarChart3, Settings, Mail, UserPlu
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { MysteryWheelConfig } from './MysteryWheelConfig';
 
 interface AdminPanelProps {
   userId: string;
@@ -869,37 +870,32 @@ export const AdminPanel = ({ userId, householdId, userRole, onPointsChange }: Ad
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
+          <MysteryWheelConfig householdId={householdId} />
+          
           <Card>
             <CardHeader>
-              <CardTitle>Household-Einstellungen</CardTitle>
+              <CardTitle>Household-Statistiken</CardTitle>
               <CardDescription>
-                Weitere Verwaltungsoptionen für dein Household.
+                Übersicht über dein Household.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium mb-2">Statistiken</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Gesamte Aufgaben:</span>
-                      <span className="ml-2 font-medium">{tasks.length}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Household-Mitglieder:</span>
-                      <span className="ml-2 font-medium">{users.length}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Gesamte Punkte:</span>
-                      <span className="ml-2 font-medium">
-                        {users.reduce((sum, user) => sum + user.total_points, 0)}
-                      </span>
-                    </div>
+              <div className="p-4 border rounded-lg bg-muted/50">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Gesamte Aufgaben:</span>
+                    <span className="ml-2 font-medium">{tasks.length}</span>
                   </div>
-                </div>
-                
-                <div className="text-center py-8 text-muted-foreground">
-                  Weitere Admin-Funktionen werden in zukünftigen Updates hinzugefügt.
+                  <div>
+                    <span className="text-muted-foreground">Household-Mitglieder:</span>
+                    <span className="ml-2 font-medium">{users.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Gesamte Punkte:</span>
+                    <span className="ml-2 font-medium">
+                      {users.reduce((sum, user) => sum + user.total_points, 0)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </CardContent>

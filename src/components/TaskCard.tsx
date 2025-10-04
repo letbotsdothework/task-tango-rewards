@@ -115,7 +115,7 @@ export const TaskCard = ({ task, currentUserId, userRole, householdId, hasPro, o
           assigned_to: task.assigned_to || currentUserId
         })
         .eq('id', task.id)
-        .eq('status', 'pending');
+        .in('status', ['pending', 'in_progress']);
 
       if (taskError) throw taskError;
 

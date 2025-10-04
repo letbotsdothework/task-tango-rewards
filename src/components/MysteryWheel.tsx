@@ -42,9 +42,16 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
     setShowReward(false);
 
     try {
+      // Get task points for double points calculation
+      const { data: taskData } = await supabase
+        .from('tasks')
+        .select('points')
+        .eq('id', taskId)
+        .single();
+
       // Call the edge function
       const { data, error } = await supabase.functions.invoke('spin-mystery-wheel', {
-        body: { taskId, householdId }
+        body: { taskId, householdId, taskPoints: taskData?.points || 10 }
       });
 
       if (error) {
@@ -93,14 +100,14 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
     if (!reward) return <Gift className="w-16 h-16" />;
     
     switch (reward.rewardType) {
+      case 'double_points':
+        return <Zap className="w-16 h-16 text-yellow-500" />;
       case 'points':
         return <Star className="w-16 h-16 text-yellow-500" />;
-      case 'badge':
-        return <Trophy className="w-16 h-16 text-purple-500" />;
-      case 'voucher':
-        return <Gift className="w-16 h-16 text-green-500" />;
-      case 'special':
-        return <Sparkles className="w-16 h-16 text-blue-500" />;
+      case 'avatar':
+        return <div className="text-6xl">{reward.rewardValue.emoji}</div>;
+      case 'custom':
+        return <div className="text-6xl">{reward.rewardValue.icon}</div>;
       default:
         return <Gift className="w-16 h-16" />;
     }
@@ -110,13 +117,13 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
     if (!reward) return '';
     
     switch (reward.rewardType) {
+      case 'double_points':
+        return `⚡ Doppelte Punkte! +${reward.rewardValue.points}`;
       case 'points':
         return `+${reward.rewardValue.points} Punkte!`;
-      case 'badge':
-        return `${reward.rewardValue.icon} ${reward.rewardValue.name}`;
-      case 'voucher':
-        return '🎟️ Gutschein gewonnen!';
-      case 'special':
+      case 'avatar':
+        return `${reward.rewardValue.emoji} Neuer Avatar!`;
+      case 'custom':
         return `${reward.rewardValue.icon} ${reward.rewardValue.name}`;
       default:
         return 'Belohnung gewonnen!';
@@ -127,14 +134,14 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
     if (!reward) return '';
     
     switch (reward.rewardType) {
+      case 'double_points':
+        return `Du hast die doppelte Punktzahl erhalten! (${reward.rewardValue.original} × 2)`;
       case 'points':
         return 'Deine Punkte wurden automatisch gutgeschrieben!';
-      case 'badge':
-        return reward.rewardValue.description;
-      case 'voucher':
-        return `Code: ${reward.rewardValue.code} - ${reward.rewardValue.description}`;
-      case 'special':
-        return reward.rewardValue.description;
+      case 'avatar':
+        return 'Dein neuer Avatar wird jetzt im Leaderboard angezeigt!';
+      case 'custom':
+        return reward.rewardValue.description || 'Glückwunsch zu deinem Gewinn!';
       default:
         return '';
     }

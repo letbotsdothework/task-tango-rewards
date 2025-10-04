@@ -11,6 +11,7 @@ interface LeaderboardUser {
   display_name: string;
   total_points: number;
   avatar_url: string | null;
+  avatar_emoji: string | null;
   completed_tasks_count: number;
   rank: number;
 }
@@ -66,7 +67,7 @@ export const Leaderboard = ({ householdId, currentUserId }: LeaderboardProps) =>
       // Get all household members with their points and completed task counts
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, display_name, total_points, avatar_url')
+        .select('id, display_name, total_points, avatar_url, avatar_emoji')
         .eq('household_id', householdId)
         .order('total_points', { ascending: false });
 
@@ -176,13 +177,21 @@ export const Leaderboard = ({ householdId, currentUserId }: LeaderboardProps) =>
 
               {/* Avatar */}
               <Avatar className="w-10 h-10">
-                <AvatarImage src={user.avatar_url || undefined} />
-                <AvatarFallback className={cn(
-                  "text-sm font-semibold",
-                  user.rank <= 3 && getRankBadge(user.rank)
-                )}>
-                  {user.display_name.charAt(0).toUpperCase()}
-                </AvatarFallback>
+                {user.avatar_emoji ? (
+                  <div className="text-2xl flex items-center justify-center w-full h-full">
+                    {user.avatar_emoji}
+                  </div>
+                ) : (
+                  <>
+                    <AvatarImage src={user.avatar_url || undefined} />
+                    <AvatarFallback className={cn(
+                      "text-sm font-semibold",
+                      user.rank <= 3 && getRankBadge(user.rank)
+                    )}>
+                      {user.display_name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </>
+                )}
               </Avatar>
 
               {/* User Info */}

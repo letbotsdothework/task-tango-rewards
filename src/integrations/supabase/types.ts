@@ -157,6 +157,47 @@ export type Database = {
         }
         Relationships: []
       }
+      mystery_custom_rewards: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          description: string | null
+          household_id: string
+          icon: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          household_id: string
+          icon?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          household_id?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mystery_custom_rewards_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mystery_reward_configs: {
         Row: {
           created_at: string
@@ -242,6 +283,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_emoji: string | null
           avatar_url: string | null
           created_at: string
           display_name: string
@@ -253,6 +295,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          avatar_emoji?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name: string
@@ -264,6 +307,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          avatar_emoji?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string

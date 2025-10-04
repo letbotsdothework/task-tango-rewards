@@ -11,16 +11,13 @@ const logStep = (step: string, details?: any) => {
   console.log(`[SPIN-MYSTERY-WHEEL] ${step}${detailsStr}`);
 };
 
-// Badge catalog
-const BADGES = [
-  { id: 'chaos_master', name: 'Meister des Chaos', icon: '🎭', description: 'Für besondere Putzleistungen' },
-  { id: 'speed_demon', name: 'Blitzschnell', icon: '⚡', description: 'Aufgabe in Rekordzeit erledigt' },
-  { id: 'perfect_score', name: 'Perfekt', icon: '💯', description: 'Aufgabe perfekt erledigt' },
-  { id: 'early_bird', name: 'Frühaufsteher', icon: '🌅', description: 'Vor 7 Uhr erledigt' },
-  { id: 'night_owl', name: 'Nachteule', icon: '🦉', description: 'Nach 22 Uhr erledigt' },
-  { id: 'team_player', name: 'Teamplayer', icon: '🤝', description: 'Hilft anderen' },
-  { id: 'streak_king', name: 'Streak-König', icon: '🔥', description: '5 Tage in Folge' },
-  { id: 'super_hero', name: 'Superheld', icon: '🦸', description: 'Über sich hinausgewachsen' },
+// Available avatars for rewards
+const AVATARS = [
+  '🦸', '🧙', '🧛', '🧜', '🧚', '👸', '🤴', '👮', '👷', '💂',
+  '🕵️', '👨‍🚀', '👨‍🚒', '👨‍⚕️', '👨‍🎓', '👨‍🏫', '👨‍⚖️', '👨‍🌾',
+  '👨‍🍳', '👨‍🔧', '👨‍🏭', '👨‍💼', '👨‍🔬', '👨‍💻', '👨‍🎤', '👨‍🎨',
+  '🦁', '🐯', '🐻', '🐼', '🐨', '🐸', '🐵', '🐶', '🐱', '🦊',
+  '🦄', '🐲', '🦕', '🦖', '🐉', '🦅', '🦉', '🦇', '🐺', '🐗'
 ];
 
 serve(async (req) => {
@@ -37,7 +34,7 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const { taskId, householdId } = await req.json();
+    const { taskId, householdId, taskPoints } = await req.json();
     
     if (!taskId || !householdId) {
       throw new Error("Task ID and Household ID are required");
@@ -91,7 +88,12 @@ serve(async (req) => {
           household_id: householdId,
           enabled: true,
           daily_limit: 3,
-          probabilities: { points: 70, badges: 20, vouchers: 8, special: 2 }
+          probabilities: { 
+            double_points: 30, 
+            avatars: 25, 
+            custom: 20, 
+            points: 25 
+          }
         })
         .select()
         .single();
@@ -131,56 +133,57 @@ serve(async (req) => {
     }
 
     // Generate weighted random reward
-    const probabilities = finalConfig.probabilities as { points: number; badges: number; vouchers: number; special: number };
+    const probabilities = finalConfig.probabilities as { 
+      double_points?: number; 
+      avatars?: number; 
+      custom?: number; 
+      points?: number;
+    };
+    
     const random = Math.random() * 100;
     let rewardType: string;
     let rewardValue: any;
 
     let cumulative = 0;
-    if (random < (cumulative += probabilities.points)) {
-      rewardType = 'points';
-      // Points: weighted random between 10-100
-      const pointsWeight = [
-        { min: 10, max: 30, weight: 50 },  // 50% chance for 10-30 points
-        { min: 31, max: 60, weight: 30 },  // 30% chance for 31-60 points
-        { min: 61, max: 100, weight: 20 }, // 20% chance for 61-100 points
-      ];
-      const weightRandom = Math.random() * 100;
-      let pointsCumulative = 0;
-      let selectedRange = pointsWeight[0];
-      for (const range of pointsWeight) {
-        if (weightRandom < (pointsCumulative += range.weight)) {
-          selectedRange = range;
-          break;
-        }
+    if (random < (cumulative += (probabilities.double_points || 0))) {
+      rewardType = 'double_points';
+      const doubledPoints = (taskPoints || 10) * 2;
+      rewardValue = { points: doubledPoints, original: taskPoints || 10 };
+      logStep("Generated double points reward", rewardValue);
+    } else if (random < (cumulative += (probabilities.avatars || 0))) {
+      rewardType = 'avatar';
+      const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+      rewardValue = { emoji: avatar, name: `Avatar ${avatar}` };
+      logStep("Generated avatar reward", rewardValue);
+    } else if (random < (cumulative += (probabilities.custom || 0))) {
+      rewardType = 'custom';
+      // Get random custom reward
+      const { data: customRewards } = await supabaseClient
+        .from('mystery_custom_rewards')
+        .select('*')
+        .eq('household_id', householdId);
+      
+      if (customRewards && customRewards.length > 0) {
+        const customReward = customRewards[Math.floor(Math.random() * customRewards.length)];
+        rewardValue = {
+          id: customReward.id,
+          name: customReward.name,
+          description: customReward.description,
+          icon: customReward.icon
+        };
+      } else {
+        // Fallback to points if no custom rewards exist
+        const points = Math.floor(Math.random() * 41) + 10; // 10-50 points
+        rewardType = 'points';
+        rewardValue = { points };
       }
-      const points = Math.floor(Math.random() * (selectedRange.max - selectedRange.min + 1)) + selectedRange.min;
+      logStep("Generated custom reward", rewardValue);
+    } else {
+      rewardType = 'points';
+      // Points: weighted random between 10-50
+      const points = Math.floor(Math.random() * 41) + 10;
       rewardValue = { points };
       logStep("Generated points reward", rewardValue);
-    } else if (random < (cumulative += probabilities.badges)) {
-      rewardType = 'badge';
-      const badge = BADGES[Math.floor(Math.random() * BADGES.length)];
-      rewardValue = badge;
-      logStep("Generated badge reward", rewardValue);
-    } else if (random < (cumulative += probabilities.vouchers)) {
-      rewardType = 'voucher';
-      // Generate voucher code
-      const voucherCode = `HAUSHALTS-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      rewardValue = {
-        code: voucherCode,
-        description: '20% Rabatt bei Partner-Shops',
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
-      };
-      logStep("Generated voucher reward", rewardValue);
-    } else {
-      rewardType = 'special';
-      const specialRewards = [
-        { name: 'Familien-Abend', description: 'Plane einen Familien-Abend', icon: '🎬' },
-        { name: 'Extra-Auszeit', description: '30 Minuten Pause für alle', icon: '☕' },
-        { name: 'Wunschessen', description: 'Wähle das nächste Abendessen', icon: '🍕' },
-      ];
-      rewardValue = specialRewards[Math.floor(Math.random() * specialRewards.length)];
-      logStep("Generated special reward", rewardValue);
     }
 
     // Record the spin
@@ -199,8 +202,8 @@ serve(async (req) => {
       throw spinError;
     }
 
-    // If it's points, add them to the user's profile
-    if (rewardType === 'points') {
+    // Handle reward application
+    if (rewardType === 'points' || rewardType === 'double_points') {
       const { data: profile } = await supabaseClient
         .from('profiles')
         .select('total_points')
@@ -213,8 +216,16 @@ serve(async (req) => {
           .update({ total_points: profile.total_points + rewardValue.points })
           .eq('user_id', user.id);
         
-        logStep("Points added to profile");
+        logStep("Points added to profile", { points: rewardValue.points });
       }
+    } else if (rewardType === 'avatar') {
+      // Update user's avatar
+      await supabaseClient
+        .from('profiles')
+        .update({ avatar_emoji: rewardValue.emoji })
+        .eq('user_id', user.id);
+      
+      logStep("Avatar updated", { emoji: rewardValue.emoji });
     }
 
     logStep("Spin completed successfully", { rewardType });
