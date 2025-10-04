@@ -63,6 +63,7 @@ export const CreateTaskDialog = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
+  const [taskType, setTaskType] = useState<'standard' | 'mystery'>('standard');
   const [assignedTo, setAssignedTo] = useState<string>('unassigned');
   const [assignmentType, setAssignmentType] = useState<'individual' | 'group' | 'rotation'>('individual');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
@@ -138,6 +139,7 @@ export const CreateTaskDialog = ({
     setTitle('');
     setDescription('');
     setNotes('');
+    setTaskType('standard');
     setAssignedTo('unassigned');
     setAssignmentType('individual');
     setPriority('medium');
@@ -357,6 +359,30 @@ export const CreateTaskDialog = ({
             
             <div className="grid gap-2">
               <Label>Aufgabentyp</Label>
+              <Select value={taskType} onValueChange={(value) => setTaskType(value as 'standard' | 'mystery')} disabled={isCreating}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">📋 Standard</SelectItem>
+                  <SelectItem value="mystery">🎲 Mystery Challenge</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {taskType === 'mystery' && (
+              <div className="p-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-lg">
+                <p className="text-sm font-medium mb-1 flex items-center gap-2">
+                  🎲 Mystery Challenge
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Bei Mystery Challenges drehen Mitglieder nach Abschluss am Mystery Wheel und erhalten zufällige Belohnungen!
+                </p>
+              </div>
+            )}
+
+            <div className="grid gap-2">
+              <Label>Zuweisung</Label>
               <Select value={assignmentType} onValueChange={(value) => setAssignmentType(value as 'individual' | 'group' | 'rotation')} disabled={isCreating}>
                 <SelectTrigger>
                   <SelectValue />
