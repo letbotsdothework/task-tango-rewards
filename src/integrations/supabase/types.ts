@@ -166,6 +166,7 @@ export type Database = {
           icon: string | null
           id: string
           name: string
+          probability: number | null
           updated_at: string | null
         }
         Insert: {
@@ -176,6 +177,7 @@ export type Database = {
           icon?: string | null
           id?: string
           name: string
+          probability?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -186,6 +188,7 @@ export type Database = {
           icon?: string | null
           id?: string
           name?: string
+          probability?: number | null
           updated_at?: string | null
         }
         Relationships: [

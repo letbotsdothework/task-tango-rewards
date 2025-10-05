@@ -17,25 +17,137 @@ interface MysteryWheelProps {
   onRewardClaimed?: () => void;
 }
 
-const WHEEL_COLORS = [
-  '#FF6B6B', // Red
-  '#4ECDC4', // Teal
-  '#45B7D1', // Blue
-  '#FFA07A', // Orange
-  '#98D8C8', // Mint
-  '#FFD93D', // Yellow
-  '#C589E8', // Purple
-  '#FF8ED4', // Pink
-];
+interface WheelSegment {
+  type: 'double_points' | 'avatar' | 'custom' | 'points';
+  startAngle: number;
+  endAngle: number;
+  color: string;
+  icon: string;
+  label: string;
+  customData?: any;
+}
 
-const WHEEL_ICONS = ['🎁', '⭐', '🏆', '💎', '🎯', '⚡', '🌟', '🔥'];
+const REWARD_COLORS: Record<string, string> = {
+  double_points: '#FFD93D', // Yellow/Gold
+  avatar: '#C589E8', // Purple
+  custom: '#FF8ED4', // Pink
+  points: '#4ECDC4', // Teal
+};
+
+const REWARD_ICONS: Record<string, string> = {
+  double_points: '⚡',
+  avatar: '🦸',
+  custom: '🎁',
+  points: '⭐',
+};
 
 export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onRewardClaimed }: MysteryWheelProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [reward, setReward] = useState<any>(null);
   const [showReward, setShowReward] = useState(false);
+  const [segments, setSegments] = useState<WheelSegment[]>([]);
   const { toast } = useToast();
+
+  // Load config to build wheel segments
+  useEffect(() => {
+    if (open && householdId) {
+      loadWheelSegments();
+    }
+  }, [open, householdId]);
+
+  const loadWheelSegments = async () => {
+    try {
+      // Get config
+      const { data: config } = await supabase
+        .from('mystery_reward_configs')
+        .select('probabilities')
+        .eq('household_id', householdId)
+        .maybeSingle();
+
+      // Get custom rewards
+      const { data: customRewards } = await supabase
+        .from('mystery_custom_rewards')
+        .select('*')
+        .eq('household_id', householdId);
+
+      const probabilities = config?.probabilities as any || {
+        double_points: 30,
+        avatars: 25,
+        custom: 20,
+        points: 25
+      };
+
+      const newSegments: WheelSegment[] = [];
+      let currentAngle = 0;
+
+      // Add double_points segment
+      if (probabilities.double_points > 0) {
+        const segmentSize = (probabilities.double_points / 100) * 360;
+        newSegments.push({
+          type: 'double_points',
+          startAngle: currentAngle,
+          endAngle: currentAngle + segmentSize,
+          color: REWARD_COLORS.double_points,
+          icon: REWARD_ICONS.double_points,
+          label: 'Doppelte Punkte'
+        });
+        currentAngle += segmentSize;
+      }
+
+      // Add avatars segment
+      if (probabilities.avatars > 0) {
+        const segmentSize = (probabilities.avatars / 100) * 360;
+        newSegments.push({
+          type: 'avatar',
+          startAngle: currentAngle,
+          endAngle: currentAngle + segmentSize,
+          color: REWARD_COLORS.avatar,
+          icon: REWARD_ICONS.avatar,
+          label: 'Avatar'
+        });
+        currentAngle += segmentSize;
+      }
+
+      // Add custom rewards segments
+      if (customRewards && customRewards.length > 0) {
+        for (const reward of customRewards) {
+          const rewardProb = reward.probability || 5;
+          if (rewardProb > 0) {
+            const segmentSize = (rewardProb / 100) * 360;
+            newSegments.push({
+              type: 'custom',
+              startAngle: currentAngle,
+              endAngle: currentAngle + segmentSize,
+              color: REWARD_COLORS.custom,
+              icon: reward.icon || REWARD_ICONS.custom,
+              label: reward.name,
+              customData: reward
+            });
+            currentAngle += segmentSize;
+          }
+        }
+      }
+
+      // Add points segment
+      if (probabilities.points > 0) {
+        const segmentSize = (probabilities.points / 100) * 360;
+        newSegments.push({
+          type: 'points',
+          startAngle: currentAngle,
+          endAngle: currentAngle + segmentSize,
+          color: REWARD_COLORS.points,
+          icon: REWARD_ICONS.points,
+          label: 'Punkte'
+        });
+        currentAngle += segmentSize;
+      }
+
+      setSegments(newSegments);
+    } catch (error) {
+      console.error('Error loading wheel segments:', error);
+    }
+  };
 
   const handleSpin = async () => {
     setIsSpinning(true);
@@ -58,10 +170,13 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
         throw error;
       }
 
-      // Calculate rotation - spin 4-5 full rotations plus random segment
-      const fullRotations = 4 + Math.random();
-      const randomSegment = Math.random() * 360;
-      const totalRotation = rotation + (fullRotations * 360) + randomSegment;
+      // Calculate rotation using targetAngle from server
+      // We need to rotate TO the target angle, accounting for pointer at top (0°)
+      // The pointer points down when wheel starts, so we need to adjust
+      const targetAngle = data.targetAngle || 0;
+      const fullRotations = 4 + Math.random(); // 4-5 full spins for drama
+      const adjustedTarget = 360 - targetAngle; // Invert because wheel rotates clockwise
+      const totalRotation = rotation + (fullRotations * 360) + adjustedTarget;
       
       setRotation(totalRotation);
 
@@ -75,8 +190,7 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
         confetti({
           particleCount: 100,
           spread: 70,
-          origin: { y: 0.6 },
-          colors: WHEEL_COLORS
+          origin: { y: 0.6 }
         });
 
         // Call onRewardClaimed callback
@@ -179,33 +293,37 @@ export const MysteryWheel = ({ open, onOpenChange, taskId, householdId, onReward
                     transition: isSpinning ? 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)' : 'none',
                   }}
                 >
-                  {WHEEL_COLORS.map((color, index) => {
-                    const angle = (360 / WHEEL_COLORS.length) * index;
-                    const nextAngle = angle + (360 / WHEEL_COLORS.length);
+                  {segments.map((segment, index) => {
+                    const startAngle = segment.startAngle;
+                    const endAngle = segment.endAngle;
+                    const midAngle = (startAngle + endAngle) / 2;
                     
                     // Calculate path for pie slice
-                    const startX = 100 + 90 * Math.cos((angle - 90) * Math.PI / 180);
-                    const startY = 100 + 90 * Math.sin((angle - 90) * Math.PI / 180);
-                    const endX = 100 + 90 * Math.cos((nextAngle - 90) * Math.PI / 180);
-                    const endY = 100 + 90 * Math.sin((nextAngle - 90) * Math.PI / 180);
+                    const startX = 100 + 90 * Math.cos((startAngle - 90) * Math.PI / 180);
+                    const startY = 100 + 90 * Math.sin((startAngle - 90) * Math.PI / 180);
+                    const endX = 100 + 90 * Math.cos((endAngle - 90) * Math.PI / 180);
+                    const endY = 100 + 90 * Math.sin((endAngle - 90) * Math.PI / 180);
+                    
+                    // Large arc flag if segment is > 180 degrees
+                    const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
                     
                     return (
                       <g key={index}>
                         <path
-                          d={`M 100 100 L ${startX} ${startY} A 90 90 0 0 1 ${endX} ${endY} Z`}
-                          fill={color}
+                          d={`M 100 100 L ${startX} ${startY} A 90 90 0 ${largeArc} 1 ${endX} ${endY} Z`}
+                          fill={segment.color}
                           stroke="#fff"
                           strokeWidth="2"
                         />
                         {/* Icon */}
                         <text
-                          x={100 + 60 * Math.cos((angle + 22.5 - 90) * Math.PI / 180)}
-                          y={100 + 60 * Math.sin((angle + 22.5 - 90) * Math.PI / 180)}
+                          x={100 + 60 * Math.cos((midAngle - 90) * Math.PI / 180)}
+                          y={100 + 60 * Math.sin((midAngle - 90) * Math.PI / 180)}
                           fontSize="24"
                           textAnchor="middle"
                           dominantBaseline="middle"
                         >
-                          {WHEEL_ICONS[index]}
+                          {segment.icon}
                         </text>
                       </g>
                     );

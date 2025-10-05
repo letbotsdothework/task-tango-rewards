@@ -132,57 +132,153 @@ serve(async (req) => {
       throw new Error(`Daily limit reached. You can spin ${finalConfig.daily_limit} times per day.`);
     }
 
-    // Generate weighted random reward
+    // Build segments based on probabilities for wheel positioning
     const probabilities = finalConfig.probabilities as { 
       double_points?: number; 
       avatars?: number; 
       custom?: number; 
       points?: number;
     };
+
+    // Get custom rewards with their individual probabilities
+    const { data: customRewards } = await supabaseClient
+      .from('mystery_custom_rewards')
+      .select('*')
+      .eq('household_id', householdId);
+
+    // Build segments array with angles
+    const segments: Array<{type: string, startAngle: number, endAngle: number, data?: any}> = [];
+    let currentAngle = 0;
+
+    // Add double_points segment
+    if (probabilities.double_points && probabilities.double_points > 0) {
+      const segmentSize = (probabilities.double_points / 100) * 360;
+      segments.push({
+        type: 'double_points',
+        startAngle: currentAngle,
+        endAngle: currentAngle + segmentSize
+      });
+      currentAngle += segmentSize;
+    }
+
+    // Add avatars segment
+    if (probabilities.avatars && probabilities.avatars > 0) {
+      const segmentSize = (probabilities.avatars / 100) * 360;
+      segments.push({
+        type: 'avatar',
+        startAngle: currentAngle,
+        endAngle: currentAngle + segmentSize
+      });
+      currentAngle += segmentSize;
+    }
+
+    // Add custom rewards segments (each with its own probability)
+    if (customRewards && customRewards.length > 0) {
+      for (const reward of customRewards) {
+        const rewardProb = reward.probability || 5;
+        if (rewardProb > 0) {
+          const segmentSize = (rewardProb / 100) * 360;
+          segments.push({
+            type: 'custom',
+            startAngle: currentAngle,
+            endAngle: currentAngle + segmentSize,
+            data: reward
+          });
+          currentAngle += segmentSize;
+        }
+      }
+    }
+
+    // Add points segment
+    if (probabilities.points && probabilities.points > 0) {
+      const segmentSize = (probabilities.points / 100) * 360;
+      segments.push({
+        type: 'points',
+        startAngle: currentAngle,
+        endAngle: currentAngle + segmentSize
+      });
+      currentAngle += segmentSize;
+    }
+
+    logStep("Segments built", { totalAngle: currentAngle, segments: segments.length });
     
+    // Generate weighted random reward
     const random = Math.random() * 100;
     let rewardType: string;
     let rewardValue: any;
+    let targetAngle: number = 0;
 
     let cumulative = 0;
     if (random < (cumulative += (probabilities.double_points || 0))) {
       rewardType = 'double_points';
       const doubledPoints = (taskPoints || 10) * 2;
       rewardValue = { points: doubledPoints, original: taskPoints || 10 };
+      // Find segment and calculate target angle
+      const segment = segments.find(s => s.type === 'double_points');
+      if (segment) {
+        targetAngle = segment.startAngle + (segment.endAngle - segment.startAngle) * Math.random();
+      }
       logStep("Generated double points reward", rewardValue);
     } else if (random < (cumulative += (probabilities.avatars || 0))) {
       rewardType = 'avatar';
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)];
       rewardValue = { emoji: avatar, name: `Avatar ${avatar}` };
-      logStep("Generated avatar reward", rewardValue);
-    } else if (random < (cumulative += (probabilities.custom || 0))) {
-      rewardType = 'custom';
-      // Get random custom reward
-      const { data: customRewards } = await supabaseClient
-        .from('mystery_custom_rewards')
-        .select('*')
-        .eq('household_id', householdId);
-      
-      if (customRewards && customRewards.length > 0) {
-        const customReward = customRewards[Math.floor(Math.random() * customRewards.length)];
-        rewardValue = {
-          id: customReward.id,
-          name: customReward.name,
-          description: customReward.description,
-          icon: customReward.icon
-        };
-      } else {
-        // Fallback to points if no custom rewards exist
-        const points = Math.floor(Math.random() * 41) + 10; // 10-50 points
-        rewardType = 'points';
-        rewardValue = { points };
+      // Find segment and calculate target angle
+      const segment = segments.find(s => s.type === 'avatar');
+      if (segment) {
+        targetAngle = segment.startAngle + (segment.endAngle - segment.startAngle) * Math.random();
       }
-      logStep("Generated custom reward", rewardValue);
+      logStep("Generated avatar reward", rewardValue);
+    } else if (customRewards && customRewards.length > 0) {
+      // Calculate total custom probability
+      const totalCustomProb = customRewards.reduce((sum, r) => sum + (r.probability || 5), 0);
+      let customCumulative = 0;
+      let selectedReward = null;
+
+      for (const reward of customRewards) {
+        const rewardProb = reward.probability || 5;
+        if (random < cumulative + customCumulative + rewardProb) {
+          selectedReward = reward;
+          break;
+        }
+        customCumulative += rewardProb;
+      }
+
+      if (selectedReward) {
+        rewardType = 'custom';
+        rewardValue = {
+          id: selectedReward.id,
+          name: selectedReward.name,
+          description: selectedReward.description,
+          icon: selectedReward.icon
+        };
+        // Find the specific custom segment
+        const segment = segments.find(s => s.type === 'custom' && s.data?.id === selectedReward.id);
+        if (segment) {
+          targetAngle = segment.startAngle + (segment.endAngle - segment.startAngle) * Math.random();
+        }
+        logStep("Generated custom reward", rewardValue);
+      } else {
+        // Fallback to points
+        rewardType = 'points';
+        const points = Math.floor(Math.random() * 41) + 10;
+        rewardValue = { points };
+        const segment = segments.find(s => s.type === 'points');
+        if (segment) {
+          targetAngle = segment.startAngle + (segment.endAngle - segment.startAngle) * Math.random();
+        }
+      }
+      cumulative += totalCustomProb;
     } else {
       rewardType = 'points';
       // Points: weighted random between 10-50
       const points = Math.floor(Math.random() * 41) + 10;
       rewardValue = { points };
+      // Find segment and calculate target angle
+      const segment = segments.find(s => s.type === 'points');
+      if (segment) {
+        targetAngle = segment.startAngle + (segment.endAngle - segment.startAngle) * Math.random();
+      }
       logStep("Generated points reward", rewardValue);
     }
 
@@ -228,11 +324,12 @@ serve(async (req) => {
       logStep("Avatar updated", { emoji: rewardValue.emoji });
     }
 
-    logStep("Spin completed successfully", { rewardType });
+    logStep("Spin completed successfully", { rewardType, targetAngle });
 
     return new Response(JSON.stringify({
       rewardType,
       rewardValue,
+      targetAngle,
       remainingSpins: finalConfig.daily_limit - (spinCount + 1)
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

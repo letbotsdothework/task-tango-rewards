@@ -15,6 +15,7 @@ interface CustomReward {
   name: string;
   description: string | null;
   icon: string;
+  probability: number;
 }
 
 interface MysteryWheelConfigProps {
@@ -32,7 +33,7 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
     points: 25
   });
   const [customRewards, setCustomRewards] = useState<CustomReward[]>([]);
-  const [newReward, setNewReward] = useState({ name: '', description: '', icon: '🎁' });
+  const [newReward, setNewReward] = useState({ name: '', description: '', icon: '🎁', probability: 5 });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -68,22 +69,40 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
   };
 
   const saveConfig = async () => {
+    // Validate total probability
+    const customTotal = customRewards.reduce((sum, r) => sum + r.probability, 0);
+    const total = probabilities.double_points + probabilities.avatars + customTotal + probabilities.points;
+    
+    if (Math.abs(total - 100) > 0.01) {
+      toast({
+        title: "Validierungsfehler",
+        description: `Die Gesamtwahrscheinlichkeit beträgt ${total.toFixed(1)}% statt 100%`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     const { data: currentUser } = await supabase.auth.getUser();
     
+    // Update config with base probabilities (custom probability is sum of all custom rewards)
     const { error } = await supabase
       .from('mystery_reward_configs')
       .upsert({
         household_id: householdId,
         enabled,
         daily_limit: dailyLimit,
-        probabilities
+        probabilities: {
+          ...probabilities,
+          custom: customTotal
+        }
       });
 
     if (error) {
+      console.error('Config save error:', error);
       toast({
         title: "Fehler",
-        description: "Konfiguration konnte nicht gespeichert werden.",
+        description: `Konfiguration konnte nicht gespeichert werden: ${error.message}`,
         variant: "destructive",
       });
     } else {
@@ -114,6 +133,7 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
         name: newReward.name,
         description: newReward.description || null,
         icon: newReward.icon,
+        probability: newReward.probability,
         created_by: currentUser.user!.id
       });
 
@@ -128,7 +148,7 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
         title: "Erstellt",
         description: "Neue Belohnung wurde hinzugefügt.",
       });
-      setNewReward({ name: '', description: '', icon: '🎁' });
+      setNewReward({ name: '', description: '', icon: '🎁', probability: 5 });
       setIsDialogOpen(false);
       loadCustomRewards();
     }
@@ -159,7 +179,29 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
     setProbabilities(prev => ({ ...prev, [key]: value }));
   };
 
-  const totalProbability = Object.values(probabilities).reduce((a, b) => a + b, 0);
+  const updateCustomRewardProbability = (id: string, probability: number) => {
+    setCustomRewards(prev => 
+      prev.map(r => r.id === id ? { ...r, probability } : r)
+    );
+  };
+
+  const saveCustomRewardProbability = async (id: string, probability: number) => {
+    const { error } = await supabase
+      .from('mystery_custom_rewards')
+      .update({ probability })
+      .eq('id', id);
+
+    if (error) {
+      toast({
+        title: "Fehler",
+        description: "Wahrscheinlichkeit konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const customRewardsTotalProb = customRewards.reduce((sum, r) => sum + r.probability, 0);
+  const totalProbability = probabilities.double_points + probabilities.avatars + customRewardsTotalProb + probabilities.points;
 
   return (
     <div className="space-y-6">
@@ -198,8 +240,9 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
           <div className="space-y-4">
             <div>
               <Label className="text-base">Gewinnwahrscheinlichkeiten</Label>
-              <p className="text-sm text-muted-foreground mb-4">
-                Gesamt: {totalProbability}% {totalProbability !== 100 && '(sollte 100% sein)'}
+              <p className={`text-sm mb-4 ${totalProbability === 100 ? 'text-green-600' : 'text-destructive'}`}>
+                Gesamt: {totalProbability.toFixed(1)}% {totalProbability !== 100 && '❌ Muss genau 100% sein!'}
+                {totalProbability === 100 && '✓'}
               </p>
             </div>
 
@@ -232,15 +275,12 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
 
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <Label>🎁 Eigene Belohnungen</Label>
-                  <span className="text-sm font-medium">{probabilities.custom}%</span>
+                  <Label>🎁 Eigene Belohnungen (Gesamt)</Label>
+                  <span className="text-sm font-medium">{customRewardsTotalProb}%</span>
                 </div>
-                <Slider
-                  value={[probabilities.custom]}
-                  onValueChange={([value]) => updateProbability('custom', value)}
-                  max={100}
-                  step={5}
-                />
+                <p className="text-xs text-muted-foreground">
+                  Wird aus allen einzelnen Belohnungen berechnet
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -258,8 +298,12 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
             </div>
           </div>
 
-          <Button onClick={saveConfig} disabled={loading} className="w-full">
-            Einstellungen speichern
+          <Button 
+            onClick={saveConfig} 
+            disabled={loading || totalProbability !== 100} 
+            className="w-full"
+          >
+            {totalProbability !== 100 ? 'Gesamtwahrscheinlichkeit muss 100% sein' : 'Einstellungen speichern'}
           </Button>
         </CardContent>
       </Card>
@@ -308,6 +352,17 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
                       placeholder="z.B. 15 Minuten zusätzliche Pause"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>Wahrscheinlichkeit (%)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newReward.probability}
+                      onChange={(e) => setNewReward({ ...newReward, probability: parseInt(e.target.value) || 0 })}
+                      placeholder="5"
+                    />
+                  </div>
                   <Button onClick={addCustomReward} className="w-full">
                     Belohnung erstellen
                   </Button>
@@ -326,24 +381,41 @@ export const MysteryWheelConfig = ({ householdId }: MysteryWheelConfigProps) => 
               customRewards.map((reward) => (
                 <div
                   key={reward.id}
-                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg gap-4"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1">
                     <span className="text-2xl">{reward.icon}</span>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium">{reward.name}</p>
                       {reward.description && (
                         <p className="text-sm text-muted-foreground">{reward.description}</p>
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteCustomReward(reward.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={reward.probability}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          updateCustomRewardProbability(reward.id, val);
+                        }}
+                        onBlur={() => saveCustomRewardProbability(reward.id, reward.probability)}
+                        className="w-16 text-center"
+                      />
+                      <span className="text-sm">%</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteCustomReward(reward.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
